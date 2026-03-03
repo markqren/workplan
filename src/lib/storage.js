@@ -1,20 +1,27 @@
 import { STORAGE_KEY, AGENT_HISTORY_KEY, CONTEXT_KEY } from './constants.js';
+import { supabase } from './supabase.js';
 
-// ── Raw storage abstraction (swap to Supabase in Phase 3) ──────────
+// ── Raw storage abstraction (Supabase kv_store) ───────────────────
 
 async function get(key) {
-  const value = localStorage.getItem(key);
-  if (value === null) return null;
-  return { key, value };
+  const { data, error } = await supabase
+    .from('kv_store').select('value').eq('key', key).single();
+  if (error || !data) return null;
+  return { key, value: JSON.stringify(data.value) };
 }
 
 async function set(key, value) {
-  localStorage.setItem(key, value);
+  const parsed = JSON.parse(value);
+  const { error } = await supabase
+    .from('kv_store').upsert({ key, value: parsed }, { onConflict: 'key' });
+  if (error) throw error;
   return { key, value };
 }
 
 async function del(key) {
-  localStorage.removeItem(key);
+  const { error } = await supabase
+    .from('kv_store').delete().eq('key', key);
+  if (error) throw error;
   return { key, deleted: true };
 }
 

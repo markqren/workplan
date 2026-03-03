@@ -55,7 +55,7 @@ The "actions" array can be empty if no tracker changes are needed. Always includ
 // ── API call logic ─────────────────────────────────────────────────
 
 export async function callAgent(recentHistory, data, contextDoc) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("/api/claude", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

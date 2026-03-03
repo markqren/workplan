@@ -1,3 +1,5 @@
+import { signOut } from '../lib/auth.js';
+
 export default function Header({ data, view, setView, filter, setFilter, onReset }) {
   return (
     <div style={{ padding: "24px 32px 16px", borderBottom: "1px solid #1C1C1E", position: "sticky", top: 0, background: "#0D0D0F", zIndex: 10 }}>
@@ -9,6 +11,7 @@ export default function Header({ data, view, setView, filter, setFilter, onReset
         </span>
         <div style={{ flex: 1 }} />
         <button onClick={onReset} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>reset</button>
+        <button onClick={() => signOut()} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>sign out</button>
       </div>
       <div style={{ display: "flex", gap: "8px" }}>
         {[{ id: "tasks", label: "Tasks" }, { id: "week", label: "Week" }, { id: "context", label: "Context" }].map(v => (

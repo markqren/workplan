@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DEFAULT_DATA } from "./lib/constants.js";
 import { loadData, saveData, loadContext, saveContext } from "./lib/storage.js";
+import { onAuthStateChange } from "./lib/auth.js";
 import DEFAULT_CONTEXT from "./context/default-context.md?raw";
 import Header from "./components/Header.jsx";
 import StatsBar from "./components/StatsBar.jsx";
@@ -9,8 +10,11 @@ import WeekShape from "./components/WeekShape.jsx";
 import QuickNotes from "./components/QuickNotes.jsx";
 import ContextEditor from "./components/ContextEditor.jsx";
 import AgentPanel from "./components/AgentPanel.jsx";
+import LoginScreen from "./components/LoginScreen.jsx";
 
 export default function App() {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("tasks");
@@ -18,13 +22,33 @@ export default function App() {
   const [agentOpen, setAgentOpen] = useState(false);
   const [contextDoc, setContextDoc] = useState(DEFAULT_CONTEXT);
 
+  // Auth: onAuthStateChange emits INITIAL_SESSION on setup, then
+  // SIGNED_IN / SIGNED_OUT / TOKEN_REFRESHED as needed — single source of truth.
   useEffect(() => {
+    const subscription = onAuthStateChange((s) => {
+      setSession(s);
+      setAuthLoading(false);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Load data once when authenticated. Using !!session so token refreshes
+  // (which swap the session object but keep it truthy) don't re-fetch.
+  const isAuthenticated = !!session;
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Reset on sign-out so re-login gets a clean slate
+      setData(null);
+      setLoading(true);
+      return;
+    }
+    setLoading(true);
     Promise.all([loadData(), loadContext()]).then(([saved, ctx]) => {
       setData(saved || DEFAULT_DATA);
       setContextDoc(ctx || DEFAULT_CONTEXT);
       setLoading(false);
     });
-  }, []);
+  }, [isAuthenticated]);
 
   const persist = useCallback((newData) => { setData(newData); saveData(newData); }, []);
 
@@ -75,6 +99,14 @@ export default function App() {
       return d;
     });
   }, []);
+
+  if (authLoading) {
+    return <div style={{ minHeight: "100vh", background: "#0D0D0F", display: "flex", alignItems: "center", justifyContent: "center", color: "#6E6E73", fontFamily: "'Space Mono', monospace" }}>Loading...</div>;
+  }
+
+  if (!session) {
+    return <LoginScreen />;
+  }
 
   if (loading) {
     return <div style={{ minHeight: "100vh", background: "#0D0D0F", display: "flex", alignItems: "center", justifyContent: "center", color: "#6E6E73", fontFamily: "'Space Mono', monospace" }}>Loading...</div>;

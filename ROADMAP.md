@@ -1,84 +1,50 @@
-# ⬡ WORKPLAN — Project Roadmap & Setup Guide
+# ⬡ WORKPLAN — Roadmap & Feature Tracker
 
-_A personal work tracker with an embedded AI agent that has persistent context about your role, team, and projects._
-
-**Target state:** Standalone web app on Netlify, backed by Supabase, accessible from any device including work laptop.
+**Last updated:** Mar 2, 2026 | Stack: Vite + React + Supabase + Netlify Functions
 
 ---
 
-## Progress Tracker
+## Next Up
 
-| Phase | Status |
-|-------|--------|
-| 1. Local project setup | ✅ DONE |
-| 2. Code decomposition | ⬜ NEXT |
-| 3. Supabase setup | ⬜ |
-| 4. Claude API proxy | ⬜ |
-| 5. Deploy to Netlify | ⬜ |
-| 6. Data migration | ⬜ |
-
----
-
-## What's Done
-
-- GitHub repo created: `markqren/workplan`
-- SSH key configured and working
-- Vite + React scaffolded
-- Supabase JS client installed
-- Initial commit pushed to `main`
-- Working prototype exists in Claude.ai artifact (`work-tracker.jsx`)
-- Agent has rich context system prompt with editable Context tab
+| ID | Item | Type | Priority | Details |
+|----|------|------|----------|---------|
+| FEA-01 | **Mobile Responsive Layout** | Feature | **High** | App is currently desktop-only with fixed widths and small touch targets. Needs full responsive treatment: (1) Header — stack nav tabs and filters vertically on mobile, increase tap targets to 44px minimum, collapse week label / saved timestamp into a second row. (2) StatsBar — wrap stat items into a 2×3 grid on narrow screens, keep progress bar full-width below. (3) TaskRow — stack task metadata (type tag, target) above title instead of inline, make status badge and action buttons (edit/delete) larger and spaced for touch. (4) Workstream — full-width with reduced horizontal padding (32px → 16px). (5) AgentPanel — expand to full-screen overlay on mobile (bottom sheet style) instead of fixed 420×520 box, larger input field, send button. (6) WeekShape — single-column stack instead of flex-wrap row. (7) ContextEditor — full-width textarea with reduced padding. (8) QuickNotes — larger input and delete targets. Breakpoint: 640px for mobile, 768px for tablet. Use CSS media queries in `src/styles/index.css` plus conditional inline style overrides where needed. |
+| FEA-02 | **Tasks View Polish** | Feature | **High** | Improve default formatting on the Tasks view: (1) Workstream headers — add subtle hover highlight, make the color indicator dot slightly larger (10px → 14px), add task count badge next to name. (2) TaskRow — improve visual hierarchy with slightly more vertical spacing between tasks (4px → 6px gap), add subtle left-border color that matches workstream color (not just status color). (3) Quick Notes section — add a section divider/separator before it, timestamp formatting should show relative time ("2h ago") not just day name. (4) Empty states — show a helpful message when a workstream has no tasks matching the current filter, and when notes are empty. (5) Overall spacing — increase content max-width from 900px to 960px for better use of screen real estate. |
+| FEA-03 | **Week View Polish** | Feature | **Medium** | Improve the Week Shape view: (1) Make day cards editable — click to edit focus label and activities text inline, with save on blur/Enter. Currently the week shape is read-only after initial load. (2) Add ability to add/remove day cards. (3) Better visual hierarchy — larger focus label, separator line between focus and activities. (4) Add a "This Week's Progress" summary at top showing completion stats (like StatsBar but contextual to the week). (5) Quick Notes section should match Tasks view formatting. |
+| FEA-04 | **Context View Polish** | Feature | **Low** | Improve the Context Editor: (1) Add a simple markdown preview toggle (split view or tab toggle between edit/preview). (2) Show word count alongside char count. (3) Add section navigation — detect `##` headers and show a clickable outline/TOC sidebar. (4) Auto-save with debounce (currently requires manual save button click). |
+| FEA-05 | **Week Rollover** | Feature | **Medium** | Add "New Week" button to Header. On click: archive current data under a timestamped key (`work-tracker-archive-YYYY-MM-DD`), reset incomplete tasks (NOT STARTED and IN PROGRESS) to NOT STARTED, remove DONE tasks, clear week shape activities, update weekLabel to new date range. Keep context doc and agent history intact. Confirm dialog before executing. |
+| FEA-06 | **Multiple Weeks Navigation** | Feature | **Medium** | After FEA-05 is implemented, add week navigation arrows (← →) in Header to browse archived weeks. Read-only view of past weeks with their task snapshots and week shapes. Current week is always the editable one. Show a list/calendar picker for jumping to specific past weeks. |
+| FEA-07 | **Export Weekly Summary** | Feature | **Low** | Generate a markdown summary of the current week: tasks completed, tasks in progress, notes, week shape. Copy to clipboard or download as `.md`. Useful for weekly standup prep or async status updates. |
+| FEA-08 | **Agent Panel Improvements** | Feature | **Medium** | (1) Markdown rendering in agent responses (currently plain text with `pre-wrap`). (2) Resize handle on agent panel to adjust width/height. (3) Keyboard shortcut to toggle panel (e.g. `Cmd+K`). (4) Show token count / cost estimate per message. (5) Let agent update its own context doc via a new `update_context` action type. |
+| FEA-09 | **Authentication** | Feature | **High** | Add Supabase Auth login gate with email/password. Login screen hides all app content until authenticated. Session persists via Supabase JS client (`onAuthStateChange`). Sign-out button in Header. Update `storage.js` to use session JWT for authenticated Supabase requests. Update RLS policy on `kv_store` to restrict access to authenticated users only (replace the open "Allow all access" policy). Update `claude-proxy.js` to validate the Supabase JWT before proxying to Claude API — reject unauthenticated requests. No signup form needed (single user — create account manually in Supabase dashboard). Prevents unauthorized access to tracker data and agent when deployed publicly. |
+| FEA-10 | **Agent Image Import** | Feature | **High** | Add image upload/paste support to the Agent Panel so Mark can share screenshots (Slack messages, charts, data tables, emails) and have the agent interpret them. Implementation: (1) Add a 📎 button next to the send button in AgentPanel input area. Clicking opens a file picker filtered to images (png, jpg, gif, webp). (2) Support clipboard paste — detect `paste` event on the input field, extract image data from `clipboardData.items`. (3) Convert uploaded/pasted images to base64 data URLs. Show a small thumbnail preview above the input before sending. (4) When sending a message with an image, format the Claude API message content as an array with both `image` and `text` blocks per Claude's vision API format: `[{ type: "image", source: { type: "base64", media_type, data } }, { type: "text", text: "user message" }]`. (5) Update `claude-proxy.js` to pass through the multimodal content format. (6) In chat history, render sent images as small inline thumbnails in the user message bubble. (7) Don't persist base64 image data in agent history (too large) — store a placeholder like "[image attached]" in the saved history. |
 
 ---
 
-## Project Structure (Target)
+## Future
 
-```
-workplan/
-├── README.md
-├── ROADMAP.md                      # This file
-├── package.json
-├── vite.config.js
-├── netlify.toml                    # Netlify build + function config
-├── .env.example                    # Template for env vars
-├── .env                            # Local env vars (gitignored)
-│
-├── netlify/
-│   └── functions/
-│       └── claude-proxy.js         # Serverless function to proxy Claude API calls
-│
-├── src/
-│   ├── main.jsx                    # React entry point
-│   ├── App.jsx                     # Root component, router
-│   │
-│   ├── lib/
-│   │   ├── supabase.js             # Supabase client init
-│   │   ├── storage.js              # KV storage abstraction (get/set/delete/list)
-│   │   └── agent.js                # Agent API call logic + action executor
-│   │
-│   ├── context/
-│   │   └── default-context.md      # Default agent briefing document (seed)
-│   │
-│   ├── components/
-│   │   ├── Header.jsx              # Sticky header with nav tabs + filters
-│   │   ├── StatsBar.jsx            # Progress overview
-│   │   ├── Workstream.jsx          # Collapsible workstream with tasks
-│   │   ├── TaskRow.jsx             # Individual task with status cycling
-│   │   ├── WeekShape.jsx           # Weekly planning view
-│   │   ├── QuickNotes.jsx          # Inline notes component
-│   │   ├── ContextEditor.jsx       # Agent briefing document editor
-│   │   └── AgentPanel.jsx          # Floating chat panel
-│   │
-│   └── styles/
-│       └── index.css               # Global styles, fonts, animations
-│
-├── public/
-│   └── favicon.svg
-│
-└── supabase/
-    └── migrations/
-        └── 001_create_kv_store.sql # Initial DB schema
-```
+| ID | Item | Type | Priority | Details |
+|----|------|------|----------|---------|
+| FEA-11 | **Slack Integration** | Feature | Low | Let the agent draft Slack messages. Could be a new action type `draft_slack` that renders a copyable message in the agent panel, or a direct Slack webhook integration for posting to specific channels. |
+| FEA-12 | **Calendar Awareness** | Feature | Low | Integrate with Google Calendar API so the agent knows about upcoming meetings. Can inform prioritization ("you have a meeting with May in 2 hours, focus on SEG-4") and suggest pre-meeting prep tasks. |
+| FEA-13 | **Weekly Retro** | Feature | Low | Agent generates an end-of-week plan-vs-actual summary: what was planned in the week shape vs what actually got done. Highlights wins, carryover items, and suggested focus for next week. Could auto-generate on Friday or on demand. |
+| FEA-14 | **Offline / PWA** | Feature | Medium | Cache app shell and last-known data for offline viewing. Service Worker for asset caching, IndexedDB for data snapshot. Offline mode is read-only. Add `manifest.json` for Add to Home Screen on mobile. |
+
+---
+
+<details>
+<summary><strong>Completed</strong> (6 items)</summary>
+
+| ID | Item | Type | Completed |
+|----|------|------|-----------|
+| INF-01 | **Local Project Setup** — GitHub repo (`markqren/workplan`), SSH configured, Vite + React scaffolded, Supabase JS client installed, initial commit pushed to `main`. | Infra | Feb 28 |
+| INF-02 | **Code Decomposition** — Decomposed monolithic `work-tracker.jsx` into proper project structure: 8 components (`Header`, `StatsBar`, `TaskRow`, `Workstream`, `WeekShape`, `QuickNotes`, `ContextEditor`, `AgentPanel`), lib files (`constants.js`, `storage.js`, `agent.js`), extracted `default-context.md`, global styles in `styles/index.css`. All functionality preserved. | Infra | Mar 2 |
+| INF-03 | **Supabase Setup** — Created Supabase project, `kv_store` table with auto-updating timestamps and open RLS policy. Created `src/lib/supabase.js` client init. Swapped `storage.js` from localStorage to Supabase — same interface, no component changes. Migration SQL saved in `supabase/migrations/001_create_kv_store.sql`. | Infra | Mar 2 |
+| INF-04 | **Claude API Proxy** — Created `netlify/functions/claude-proxy.js` serverless function that proxies requests to Claude API with server-side `ANTHROPIC_API_KEY`. Updated `agent.js` to call `/api/claude` instead of Anthropic directly. No API key in client code. | Infra | Mar 2 |
+| INF-05 | **Netlify Deployment Config** — Created `netlify.toml` with build command, publish directory, functions directory, and SPA redirect rule. Ready for Netlify auto-deploy from GitHub. | Infra | Mar 2 |
+| INF-06 | **Data Migration** — Default seed data baked into `constants.js` (`DEFAULT_DATA`) and `default-context.md`. App auto-seeds on first load when Supabase is empty — no manual migration needed. | Infra | Mar 2 |
+
+</details>
 
 ---
 
@@ -99,322 +65,67 @@ workplan/
 ├─────────────────────────────────────┤
 │         Supabase (Storage)          │
 │  kv_store table                     │
-│  - workplan-data (tracker data)     │
-│  - workplan-agent-history           │
-│  - workplan-context                 │
+│  - work-tracker-v1 (tracker data)   │
+│  - work-tracker-agent-history       │
+│  - work-tracker-context             │
 │  Row-level security: anon key OK    │
 │  for single-user app                │
 └─────────────────────────────────────┘
 ```
 
----
+## Project Structure
 
-## Phase 2: Code Decomposition (NEXT)
-
-This is where Claude Code comes in. You'll give it the monolithic `work-tracker.jsx` (the source artifact from Claude.ai) and this roadmap, and ask it to break it into the project structure above.
-
-### Step 1: Copy source files into the repo
-
-Download `work-tracker.jsx` and `ROADMAP.md` from this Claude.ai conversation and put them in the repo root:
-
-```bash
-# From your workplan/ directory
-cp ~/Downloads/work-tracker.jsx ./src/source-artifact.jsx
-cp ~/Downloads/ROADMAP.md ./ROADMAP.md
 ```
-
-### Step 2: Run Claude Code for decomposition
-
-Open Claude Code in the `workplan/` directory and give it this prompt:
-
-> I'm migrating a single-file React app (src/source-artifact.jsx) into a proper project structure. The target structure is defined in ROADMAP.md. Please:
->
-> 1. Read src/source-artifact.jsx and ROADMAP.md
-> 2. Decompose the monolithic component into separate files following the project structure
-> 3. Create src/lib/storage.js as an abstraction layer — for now, implement it using localStorage as a placeholder (we'll swap to Supabase in the next phase)
-> 4. Create src/lib/agent.js with the system prompt builder and API call logic — for now, point the fetch URL to https://api.anthropic.com/v1/messages (we'll swap to /api/claude proxy later)
-> 5. Extract the default agent context document into src/context/default-context.md
-> 6. Wire everything together in App.jsx with the three views (Tasks, Week, Context)
-> 7. Set up src/styles/index.css with the global styles, font imports, and animations
-> 8. Update main.jsx to render App
-> 9. Delete Vite's default boilerplate (App.css, assets/react.svg, etc.)
-> 10. Verify the app runs with npm run dev
->
-> Keep all functionality identical to the source artifact. The app should look and behave exactly the same, just properly structured.
-
-### Step 3: Verify and commit
-
-```bash
-npm run dev
-# Check localhost:5173 — should look identical to the Claude.ai artifact
-git add .
-git commit -m "decompose into component structure"
-git push
+workplan/
+├── ROADMAP.md                      # This file
+├── CLAUDE.md                       # Claude Code project instructions
+├── package.json
+├── vite.config.js
+├── netlify.toml                    # Netlify build + function config
+├── .env.example                    # Template for env vars
+├── .env                            # Local env vars (gitignored)
+│
+├── netlify/
+│   └── functions/
+│       └── claude-proxy.js         # Serverless function to proxy Claude API calls
+│
+├── src/
+│   ├── main.jsx                    # React entry point
+│   ├── App.jsx                     # Root component, state management, view routing
+│   ├── source-artifact.jsx         # Original monolithic prototype (reference only)
+│   │
+│   ├── lib/
+│   │   ├── constants.js            # Storage keys, status config, type labels, default data
+│   │   ├── supabase.js             # Supabase client init
+│   │   ├── storage.js              # KV storage abstraction (get/set/delete)
+│   │   └── agent.js                # System prompt builder + API call logic
+│   │
+│   ├── context/
+│   │   └── default-context.md      # Default agent briefing document (seed)
+│   │
+│   ├── components/
+│   │   ├── Header.jsx              # Sticky header with nav tabs + filters
+│   │   ├── StatsBar.jsx            # Progress overview (counts + bar)
+│   │   ├── Workstream.jsx          # Collapsible workstream with task list + add form
+│   │   ├── TaskRow.jsx             # Individual task with status cycling, edit/delete
+│   │   ├── WeekShape.jsx           # Weekly planning view (day cards)
+│   │   ├── QuickNotes.jsx          # Inline notes with add/delete
+│   │   ├── ContextEditor.jsx       # Agent briefing document editor
+│   │   └── AgentPanel.jsx          # Floating chat panel
+│   │
+│   └── styles/
+│       └── index.css               # Global styles, fonts, animations
+│
+└── supabase/
+    └── migrations/
+        └── 001_create_kv_store.sql # Initial DB schema
 ```
-
----
-
-## Phase 3: Supabase Setup
-
-### Step 4: Create Supabase project
-
-1. Go to [supabase.com](https://supabase.com) → New Project
-2. Name: `workplan`
-3. Region: us-west-1 (closest to Bay Area)
-4. Save the **Project URL** and **anon key**
-
-### Step 5: Create the database table
-
-In Supabase SQL Editor, run:
-
-```sql
--- Simple key-value store for all app data
-CREATE TABLE kv_store (
-  key TEXT PRIMARY KEY,
-  value JSONB NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Auto-update timestamp on changes
-CREATE OR REPLACE FUNCTION update_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER kv_store_timestamp
-  BEFORE UPDATE ON kv_store
-  FOR EACH ROW
-  EXECUTE FUNCTION update_timestamp();
-
--- Allow anon access (single-user app, no auth needed)
-ALTER TABLE kv_store ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Allow all access" ON kv_store
-  FOR ALL USING (true) WITH CHECK (true);
-```
-
-Also save this SQL as `supabase/migrations/001_create_kv_store.sql` in your repo for reference.
-
-### Step 6: Configure environment variables
-
-Create `.env` in your repo root:
-```
-VITE_SUPABASE_URL=https://xxxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGci...
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-Create `.env.example` (same keys, no values). Make sure `.env` is in `.gitignore`.
-
-### Step 7: Swap storage to Supabase
-
-Use Claude Code:
-
-> Swap the localStorage placeholder in src/lib/storage.js to use Supabase. Create src/lib/supabase.js to initialize the client using VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from environment variables. The storage interface (get/set/delete) should stay identical so no component changes are needed. Here's the Supabase storage implementation:
->
-> ```javascript
-> // src/lib/supabase.js
-> import { createClient } from '@supabase/supabase-js';
-> export const supabase = createClient(
->   import.meta.env.VITE_SUPABASE_URL,
->   import.meta.env.VITE_SUPABASE_ANON_KEY
-> );
->
-> // src/lib/storage.js — swap implementation
-> import { supabase } from './supabase.js';
->
-> export async function get(key) {
->   const { data, error } = await supabase
->     .from('kv_store').select('value').eq('key', key).single();
->   if (error || !data) return null;
->   return { key, value: JSON.stringify(data.value) };
-> }
->
-> export async function set(key, value) {
->   const parsed = JSON.parse(value);
->   const { error } = await supabase
->     .from('kv_store').upsert({ key, value: parsed }, { onConflict: 'key' });
->   if (error) throw error;
->   return { key, value };
-> }
->
-> export async function del(key) {
->   const { error } = await supabase
->     .from('kv_store').delete().eq('key', key);
->   if (error) throw error;
->   return { key, deleted: true };
-> }
-> ```
-
-### Step 8: Verify and commit
-
-```bash
-npm run dev
-# Test: add a task, refresh the page — data should persist via Supabase
-git add .
-git commit -m "supabase storage integration"
-git push
-```
-
----
-
-## Phase 4: Claude API Proxy
-
-### Step 9: Create the serverless function
-
-Create `netlify/functions/claude-proxy.js`:
-
-```javascript
-export default async (req) => {
-  if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
-  }
-
-  const body = await req.json();
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify(body),
-  });
-
-  const data = await response.json();
-  return new Response(JSON.stringify(data), {
-    headers: { 'Content-Type': 'application/json' },
-  });
-};
-
-export const config = { path: '/api/claude' };
-```
-
-### Step 10: Update agent to use proxy
-
-Use Claude Code:
-
-> Update src/lib/agent.js to call /api/claude instead of the Anthropic API directly. Remove any API key references from client-side code. The serverless function handles authentication server-side.
-
-### Step 11: Commit
-
-```bash
-git add .
-git commit -m "add claude API proxy function"
-git push
-```
-
----
-
-## Phase 5: Deploy to Netlify
-
-### Step 12: Configure Netlify
-
-Create `netlify.toml` in repo root:
-
-```toml
-[build]
-  command = "npm run build"
-  publish = "dist"
-  functions = "netlify/functions"
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-```
-
-### Step 13: Connect and deploy
-
-1. Go to [app.netlify.com](https://app.netlify.com) → Add new site → Import from GitHub
-2. Select `markqren/workplan`
-3. Build settings should auto-detect from `netlify.toml`
-4. Add environment variables in Netlify dashboard → Site settings → Environment variables:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-   - `ANTHROPIC_API_KEY`
-5. Deploy
-
-### Step 14: Verify from work laptop
-
-- Hit your Netlify URL (something like `workplan-markqren.netlify.app`)
-- Confirm data loads from Supabase
-- Test the agent — should route through the serverless function
-- Add a task, close browser, reopen — data persists
-
-### Step 15: Commit
-
-```bash
-git add .
-git commit -m "netlify deployment config"
-git push
-```
-
----
-
-## Phase 6: Data Migration
-
-### Step 16: Seed data from Claude.ai artifact
-
-Open the workplan artifact in Claude.ai, open browser console (Cmd+Option+J), and run:
-
-```javascript
-const data = await window.storage.get('work-tracker-v1');
-const ctx = await window.storage.get('work-tracker-context');
-const hist = await window.storage.get('work-tracker-agent-history');
-copy(JSON.stringify({ data: data?.value, ctx: ctx?.value, hist: hist?.value }));
-```
-
-This copies your current tracker data to clipboard. Then use Claude Code or Supabase SQL Editor to insert it into the `kv_store` table.
-
----
-
-## Future Roadmap
-
-### v1.1 — Quality of Life
-- [ ] Week rollover: archive completed tasks, roll forward incomplete ones
-- [ ] Multiple weeks: navigation between weeks, historical view
-- [ ] Export: generate weekly summary markdown
-
-### v1.5 — Enhancements
-- [ ] Auth: simple password or Supabase magic link
-- [ ] Mobile optimization: responsive layout, touch-friendly
-- [ ] Agent upgrades: let agent update its own context doc, vision for screenshots
-
-### v2.0 — Integrations
-- [ ] Slack integration: agent can draft messages
-- [ ] Calendar awareness: agent knows about upcoming meetings
-- [ ] Weekly retro: agent generates plan vs. actual summary
-
----
 
 ## Environment & Cost
 
 | Service | What you need | Free tier? |
 |---------|--------------|------------|
-| GitHub | Private repo | ✅ |
-| Supabase | Project + anon key | ✅ (500MB DB, 50k req/mo) |
-| Netlify | Site + env vars | ✅ (100GB bandwidth, 125k fn calls/mo) |
+| GitHub | Private repo | Yes |
+| Supabase | Project + anon key | Yes (500MB DB, 50k req/mo) |
+| Netlify | Site + env vars | Yes (100GB bandwidth, 125k fn calls/mo) |
 | Anthropic | API key | Pay-per-use (~$0.01-0.03 per agent call) |
-
-All well within free tier for single-user usage.
-
----
-
-## Claude Code Quick Prompts
-
-**Decompose the artifact:**
-> Read src/source-artifact.jsx and ROADMAP.md. Decompose the monolithic component into the project structure defined in the roadmap. Keep all functionality identical.
-
-**Swap to Supabase:**
-> Replace localStorage in src/lib/storage.js with Supabase. Create src/lib/supabase.js. Same interface, no component changes needed.
-
-**Add a new feature:**
-> Add week rollover functionality. When clicking "New Week", archive current data under a timestamped key, reset incomplete tasks to NOT STARTED, clear done tasks. Keep context doc and agent history.
-
-**Debug something:**
-> The agent panel isn't returning responses. Check src/lib/agent.js — verify the fetch URL, request format, and response parsing. Check browser console for errors.

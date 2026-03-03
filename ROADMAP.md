@@ -2,17 +2,41 @@
 
 _A personal work tracker with an embedded AI agent that has persistent context about your role, team, and projects._
 
-**Current state:** Working prototype in Claude.ai artifact with persistent storage, full task management UI, and context-aware AI agent.
-
 **Target state:** Standalone web app on Netlify, backed by Supabase, accessible from any device including work laptop.
 
 ---
 
-## Project Structure
+## Progress Tracker
+
+| Phase | Status |
+|-------|--------|
+| 1. Local project setup | ✅ DONE |
+| 2. Code decomposition | ⬜ NEXT |
+| 3. Supabase setup | ⬜ |
+| 4. Claude API proxy | ⬜ |
+| 5. Deploy to Netlify | ⬜ |
+| 6. Data migration | ⬜ |
+
+---
+
+## What's Done
+
+- GitHub repo created: `markqren/workplan`
+- SSH key configured and working
+- Vite + React scaffolded
+- Supabase JS client installed
+- Initial commit pushed to `main`
+- Working prototype exists in Claude.ai artifact (`work-tracker.jsx`)
+- Agent has rich context system prompt with editable Context tab
+
+---
+
+## Project Structure (Target)
 
 ```
-workplan_site/
+workplan/
 ├── README.md
+├── ROADMAP.md                      # This file
 ├── package.json
 ├── vite.config.js
 ├── netlify.toml                    # Netlify build + function config
@@ -53,7 +77,7 @@ workplan_site/
 │
 └── supabase/
     └── migrations/
-        └── 001_create_kv_store.sql  # Initial DB schema
+        └── 001_create_kv_store.sql # Initial DB schema
 ```
 
 ---
@@ -75,9 +99,9 @@ workplan_site/
 ├─────────────────────────────────────┤
 │         Supabase (Storage)          │
 │  kv_store table                     │
-│  - work-tracker-v1 (tracker data)   │
-│  - work-tracker-agent-history       │
-│  - work-tracker-context             │
+│  - workplan-data (tracker data)     │
+│  - workplan-agent-history           │
+│  - workplan-context                 │
 │  Row-level security: anon key OK    │
 │  for single-user app                │
 └─────────────────────────────────────┘
@@ -85,70 +109,73 @@ workplan_site/
 
 ---
 
-## Step-by-Step Setup Guide
+## Phase 2: Code Decomposition (NEXT)
 
-### Phase 1: Local Project Setup
+This is where Claude Code comes in. You'll give it the monolithic `work-tracker.jsx` (the source artifact from Claude.ai) and this roadmap, and ask it to break it into the project structure above.
 
-**Step 1: Create GitHub repo**
-1. Go to [github.com/new](https://github.com/new) → name it `workplan_site`, set to private, create
-2. Locally:
+### Step 1: Copy source files into the repo
+
+Download `work-tracker.jsx` and `ROADMAP.md` from this Claude.ai conversation and put them in the repo root:
+
 ```bash
-mkdir workplan_site && cd workplan_site
-git init
-git remote add origin git@github.com:<your-username>/workplan_site.git
+# From your workplan/ directory
+cp ~/Downloads/work-tracker.jsx ./src/source-artifact.jsx
+cp ~/Downloads/ROADMAP.md ./ROADMAP.md
 ```
 
-**Step 2: Initialize Vite + React project**
-```bash
-npm create vite@latest . -- --template react
-npm install
-```
+### Step 2: Run Claude Code for decomposition
 
-**Step 3: Install dependencies**
-```bash
-npm install @supabase/supabase-js
-```
+Open Claude Code in the `workplan/` directory and give it this prompt:
 
-**Step 4: Create project structure**
-- Move the current monolithic `work-tracker.jsx` into the component structure above
-- Claude Code can handle this decomposition — prompt it with: _"Decompose this single-file React component into the project structure defined in the roadmap. Extract each component, create the storage abstraction layer, and set up the Vite entry point."_
-- Provide it both this roadmap file and the current `work-tracker.jsx`
+> I'm migrating a single-file React app (src/source-artifact.jsx) into a proper project structure. The target structure is defined in ROADMAP.md. Please:
+>
+> 1. Read src/source-artifact.jsx and ROADMAP.md
+> 2. Decompose the monolithic component into separate files following the project structure
+> 3. Create src/lib/storage.js as an abstraction layer — for now, implement it using localStorage as a placeholder (we'll swap to Supabase in the next phase)
+> 4. Create src/lib/agent.js with the system prompt builder and API call logic — for now, point the fetch URL to https://api.anthropic.com/v1/messages (we'll swap to /api/claude proxy later)
+> 5. Extract the default agent context document into src/context/default-context.md
+> 6. Wire everything together in App.jsx with the three views (Tasks, Week, Context)
+> 7. Set up src/styles/index.css with the global styles, font imports, and animations
+> 8. Update main.jsx to render App
+> 9. Delete Vite's default boilerplate (App.css, assets/react.svg, etc.)
+> 10. Verify the app runs with npm run dev
+>
+> Keep all functionality identical to the source artifact. The app should look and behave exactly the same, just properly structured.
 
-**Step 5: Environment variables**
-Create `.env`:
-```
-VITE_SUPABASE_URL=<your-supabase-url>
-VITE_SUPABASE_ANON_KEY=<your-supabase-anon-key>
-ANTHROPIC_API_KEY=<your-anthropic-api-key>
-```
-Create `.env.example` (same keys, no values). Add `.env` to `.gitignore`.
+### Step 3: Verify and commit
 
-**Step 6: Verify local dev**
 ```bash
 npm run dev
+# Check localhost:5173 — should look identical to the Claude.ai artifact
+git add .
+git commit -m "decompose into component structure"
+git push
 ```
 
 ---
 
-### Phase 2: Supabase Setup
+## Phase 3: Supabase Setup
 
-**Step 7: Create Supabase project**
+### Step 4: Create Supabase project
+
 1. Go to [supabase.com](https://supabase.com) → New Project
-2. Name: `workplan` (or whatever you want)
-3. Region: pick closest to you (us-west-1 if Bay Area)
-4. Save the project URL and anon key → put in `.env`
+2. Name: `workplan`
+3. Region: us-west-1 (closest to Bay Area)
+4. Save the **Project URL** and **anon key**
 
-**Step 8: Create the KV store table**
+### Step 5: Create the database table
+
 In Supabase SQL Editor, run:
+
 ```sql
--- Simple key-value store for tracker data
+-- Simple key-value store for all app data
 CREATE TABLE kv_store (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Auto-update timestamp
+-- Auto-update timestamp on changes
 CREATE OR REPLACE FUNCTION update_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -162,57 +189,84 @@ CREATE TRIGGER kv_store_timestamp
   FOR EACH ROW
   EXECUTE FUNCTION update_timestamp();
 
--- Allow anon access (single-user app, no auth needed yet)
+-- Allow anon access (single-user app, no auth needed)
 ALTER TABLE kv_store ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow all access" ON kv_store
   FOR ALL USING (true) WITH CHECK (true);
 ```
 
-**Step 9: Create storage abstraction**
-In `src/lib/storage.js`, create a drop-in replacement for `window.storage`:
-```javascript
-import { supabase } from './supabase.js';
+Also save this SQL as `supabase/migrations/001_create_kv_store.sql` in your repo for reference.
 
-export async function get(key) {
-  const { data, error } = await supabase
-    .from('kv_store')
-    .select('value')
-    .eq('key', key)
-    .single();
-  if (error || !data) return null;
-  return { key, value: JSON.stringify(data.value) };
-}
+### Step 6: Configure environment variables
 
-export async function set(key, value) {
-  const parsed = JSON.parse(value);
-  const { data, error } = await supabase
-    .from('kv_store')
-    .upsert({ key, value: parsed }, { onConflict: 'key' })
-    .select()
-    .single();
-  if (error) throw error;
-  return { key, value };
-}
-
-export async function del(key) {
-  const { error } = await supabase
-    .from('kv_store')
-    .delete()
-    .eq('key', key);
-  if (error) throw error;
-  return { key, deleted: true };
-}
+Create `.env` in your repo root:
+```
+VITE_SUPABASE_URL=https://xxxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGci...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-This means the components don't need to change their logic at all — same `get`/`set` interface, just backed by Supabase instead of `window.storage`.
+Create `.env.example` (same keys, no values). Make sure `.env` is in `.gitignore`.
+
+### Step 7: Swap storage to Supabase
+
+Use Claude Code:
+
+> Swap the localStorage placeholder in src/lib/storage.js to use Supabase. Create src/lib/supabase.js to initialize the client using VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY from environment variables. The storage interface (get/set/delete) should stay identical so no component changes are needed. Here's the Supabase storage implementation:
+>
+> ```javascript
+> // src/lib/supabase.js
+> import { createClient } from '@supabase/supabase-js';
+> export const supabase = createClient(
+>   import.meta.env.VITE_SUPABASE_URL,
+>   import.meta.env.VITE_SUPABASE_ANON_KEY
+> );
+>
+> // src/lib/storage.js — swap implementation
+> import { supabase } from './supabase.js';
+>
+> export async function get(key) {
+>   const { data, error } = await supabase
+>     .from('kv_store').select('value').eq('key', key).single();
+>   if (error || !data) return null;
+>   return { key, value: JSON.stringify(data.value) };
+> }
+>
+> export async function set(key, value) {
+>   const parsed = JSON.parse(value);
+>   const { error } = await supabase
+>     .from('kv_store').upsert({ key, value: parsed }, { onConflict: 'key' });
+>   if (error) throw error;
+>   return { key, value };
+> }
+>
+> export async function del(key) {
+>   const { error } = await supabase
+>     .from('kv_store').delete().eq('key', key);
+>   if (error) throw error;
+>   return { key, deleted: true };
+> }
+> ```
+
+### Step 8: Verify and commit
+
+```bash
+npm run dev
+# Test: add a task, refresh the page — data should persist via Supabase
+git add .
+git commit -m "supabase storage integration"
+git push
+```
 
 ---
 
-### Phase 3: Claude API Proxy
+## Phase 4: Claude API Proxy
 
-**Step 10: Create Netlify serverless function**
+### Step 9: Create the serverless function
+
 Create `netlify/functions/claude-proxy.js`:
+
 ```javascript
 export default async (req) => {
   if (req.method !== 'POST') {
@@ -240,15 +294,28 @@ export default async (req) => {
 export const config = { path: '/api/claude' };
 ```
 
-**Step 11: Update agent API calls**
-In `src/lib/agent.js`, change the fetch URL from `https://api.anthropic.com/v1/messages` to `/api/claude`. The serverless function handles auth server-side so the API key never touches the browser.
+### Step 10: Update agent to use proxy
+
+Use Claude Code:
+
+> Update src/lib/agent.js to call /api/claude instead of the Anthropic API directly. Remove any API key references from client-side code. The serverless function handles authentication server-side.
+
+### Step 11: Commit
+
+```bash
+git add .
+git commit -m "add claude API proxy function"
+git push
+```
 
 ---
 
-### Phase 4: Deploy
+## Phase 5: Deploy to Netlify
 
-**Step 12: Configure Netlify**
-Create `netlify.toml`:
+### Step 12: Configure Netlify
+
+Create `netlify.toml` in repo root:
+
 ```toml
 [build]
   command = "npm run build"
@@ -261,85 +328,93 @@ Create `netlify.toml`:
   status = 200
 ```
 
-**Step 13: Connect to Netlify**
+### Step 13: Connect and deploy
+
 1. Go to [app.netlify.com](https://app.netlify.com) → Add new site → Import from GitHub
-2. Select your `workplan_site` repo
+2. Select `markqren/workplan`
 3. Build settings should auto-detect from `netlify.toml`
-4. Add environment variables in Netlify dashboard:
+4. Add environment variables in Netlify dashboard → Site settings → Environment variables:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
    - `ANTHROPIC_API_KEY`
 5. Deploy
 
-**Step 14: Verify**
-- Hit your Netlify URL from your work laptop
+### Step 14: Verify from work laptop
+
+- Hit your Netlify URL (something like `workplan-markqren.netlify.app`)
 - Confirm data loads from Supabase
-- Test the agent (should route through serverless function)
-- Add a task, close the browser, reopen — data should persist
+- Test the agent — should route through the serverless function
+- Add a task, close browser, reopen — data persists
+
+### Step 15: Commit
+
+```bash
+git add .
+git commit -m "netlify deployment config"
+git push
+```
 
 ---
 
-### Phase 5: Data Migration
+## Phase 6: Data Migration
 
-**Step 15: Seed initial data**
-You have existing data in Claude.ai's artifact storage. To migrate:
-1. Open the tracker artifact here in Claude.ai
-2. Open browser console → run:
-   ```javascript
-   const data = await window.storage.get('work-tracker-v1');
-   const ctx = await window.storage.get('work-tracker-context');
-   const hist = await window.storage.get('work-tracker-agent-history');
-   console.log(JSON.stringify({ data: data?.value, ctx: ctx?.value, hist: hist?.value }));
-   ```
-3. Copy the output
-4. Insert into Supabase via SQL Editor or use the Claude Code CLI to write a quick seed script
+### Step 16: Seed data from Claude.ai artifact
+
+Open the workplan artifact in Claude.ai, open browser console (Cmd+Option+J), and run:
+
+```javascript
+const data = await window.storage.get('work-tracker-v1');
+const ctx = await window.storage.get('work-tracker-context');
+const hist = await window.storage.get('work-tracker-agent-history');
+copy(JSON.stringify({ data: data?.value, ctx: ctx?.value, hist: hist?.value }));
+```
+
+This copies your current tracker data to clipboard. Then use Claude Code or Supabase SQL Editor to insert it into the `kv_store` table.
 
 ---
 
 ## Future Roadmap
 
-### Near-term (v1.1)
+### v1.1 — Quality of Life
 - [ ] Week rollover: archive completed tasks, roll forward incomplete ones
 - [ ] Multiple weeks: navigation between weeks, historical view
-- [ ] Export: generate weekly summary markdown (shareable with Agnal)
+- [ ] Export: generate weekly summary markdown
 
-### Medium-term (v1.5)
-- [ ] Auth: simple password or Supabase magic link (if you want it secured)
-- [ ] Mobile optimization: responsive layout, touch-friendly status cycling
-- [ ] Agent upgrades: let agent update the context doc itself, read screenshots via vision
+### v1.5 — Enhancements
+- [ ] Auth: simple password or Supabase magic link
+- [ ] Mobile optimization: responsive layout, touch-friendly
+- [ ] Agent upgrades: let agent update its own context doc, vision for screenshots
 
-### Long-term (v2.0)
-- [ ] Slack integration: agent can draft Slack messages, pull thread context
-- [ ] Calendar awareness: agent knows about upcoming meetings from context doc
-- [ ] Weekly retro: agent generates end-of-week summary comparing plan vs. actual
-
----
-
-## Key Commands (Claude Code)
-
-Useful prompts for Claude Code as you develop:
-
-**Initial decomposition:**
-> Decompose work-tracker.jsx into the project structure defined in ROADMAP.md. Keep all functionality identical but split into separate component files with the storage abstraction layer.
-
-**Supabase integration:**
-> Replace all window.storage calls with the Supabase storage abstraction in src/lib/storage.js. The interface should be identical so components don't need logic changes.
-
-**Testing the proxy:**
-> Create a test script that sends a sample agent message through the Netlify function at /api/claude and logs the response.
-
-**Adding a feature:**
-> Add week rollover functionality. When clicking "New Week", archive current week's data under a timestamped key, reset incomplete tasks to NOT STARTED, and clear completed tasks. Keep the context doc and agent history unchanged.
+### v2.0 — Integrations
+- [ ] Slack integration: agent can draft messages
+- [ ] Calendar awareness: agent knows about upcoming meetings
+- [ ] Weekly retro: agent generates plan vs. actual summary
 
 ---
 
-## Environment Checklist
+## Environment & Cost
 
 | Service | What you need | Free tier? |
 |---------|--------------|------------|
 | GitHub | Private repo | ✅ |
-| Supabase | Project + anon key | ✅ (500MB DB, 50k requests/mo) |
-| Netlify | Site + env vars | ✅ (100GB bandwidth, 125k function calls/mo) |
-| Anthropic | API key | Pay-per-use (agent calls are small, ~$0.01-0.03 each) |
+| Supabase | Project + anon key | ✅ (500MB DB, 50k req/mo) |
+| Netlify | Site + env vars | ✅ (100GB bandwidth, 125k fn calls/mo) |
+| Anthropic | API key | Pay-per-use (~$0.01-0.03 per agent call) |
 
-All well within free tier limits for a single-user app.
+All well within free tier for single-user usage.
+
+---
+
+## Claude Code Quick Prompts
+
+**Decompose the artifact:**
+> Read src/source-artifact.jsx and ROADMAP.md. Decompose the monolithic component into the project structure defined in the roadmap. Keep all functionality identical.
+
+**Swap to Supabase:**
+> Replace localStorage in src/lib/storage.js with Supabase. Create src/lib/supabase.js. Same interface, no component changes needed.
+
+**Add a new feature:**
+> Add week rollover functionality. When clicking "New Week", archive current data under a timestamped key, reset incomplete tasks to NOT STARTED, clear done tasks. Keep context doc and agent history.
+
+**Debug something:**
+> The agent panel isn't returning responses. Check src/lib/agent.js — verify the fetch URL, request format, and response parsing. Check browser console for errors.

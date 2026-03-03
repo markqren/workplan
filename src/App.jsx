@@ -234,6 +234,25 @@ export default function App() {
     if (ts) syncTimestamps.current[AGENT_HISTORY_KEY] = ts;
   }, []);
 
+  // Pull fresh data + context from Supabase for the agent API call.
+  // Updates local state and sync timestamps as a side-effect.
+  const getFreshData = useCallback(async () => {
+    const [freshData, freshCtx, dataTs, ctxTs] = await Promise.all([
+      loadData(),
+      loadContext(),
+      getTimestamp(STORAGE_KEY),
+      getTimestamp(CONTEXT_KEY),
+    ]);
+    const d = freshData || DEFAULT_DATA;
+    const c = freshCtx ?? DEFAULT_CONTEXT;
+    setData(d);
+    dataRef.current = d;
+    setContextDoc(c);
+    if (dataTs) syncTimestamps.current[STORAGE_KEY] = dataTs;
+    if (ctxTs) syncTimestamps.current[CONTEXT_KEY] = ctxTs;
+    return { data: d, contextDoc: c };
+  }, []);
+
   // ── Render ──────────────────────────────────────────────────────
 
   if (authLoading) {
@@ -284,7 +303,7 @@ export default function App() {
         )}
       </div>
 
-      <AgentPanel data={data} contextDoc={contextDoc} onApplyActions={handleAgentActions} isOpen={agentOpen} onToggle={() => setAgentOpen(!agentOpen)} refreshKey={agentRefreshKey} onHistorySaved={handleHistorySaved} />
+      <AgentPanel onApplyActions={handleAgentActions} isOpen={agentOpen} onToggle={() => setAgentOpen(!agentOpen)} refreshKey={agentRefreshKey} onHistorySaved={handleHistorySaved} getFreshData={getFreshData} />
 
       {syncToast && (
         <div style={{

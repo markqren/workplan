@@ -13,7 +13,7 @@ function actionLabels(actions) {
   }).filter(Boolean);
 }
 
-export default function AgentPanel({ data, contextDoc, onApplyActions, isOpen, onToggle, refreshKey, onHistorySaved }) {
+export default function AgentPanel({ onApplyActions, isOpen, onToggle, refreshKey, onHistorySaved, getFreshData }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -42,18 +42,29 @@ export default function AgentPanel({ data, contextDoc, onApplyActions, isOpen, o
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userMsg = { role: "user", content: input };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+
+    // Optimistic: show user message immediately
+    setMessages(prev => [...prev, userMsg]);
     setInput("");
     setLoading(true);
 
     try {
+      // Pull fresh history + tracker state in parallel before API call
+      const [freshHistory, { data: freshData, contextDoc: freshCtx }] = await Promise.all([
+        loadAgentHistory(),
+        getFreshData(),
+      ]);
+
+      // Merge: fresh history from Supabase + user's new message
+      const newMessages = [...freshHistory, userMsg];
+      setMessages(newMessages);
+
       const recentHistory = newMessages.slice(-20).map(m => ({
         role: m.role === "user" ? "user" : "assistant",
         content: m.role === "user" ? m.content : (m.rawJson || m.content),
       }));
 
-      const { parsed, rawJson } = await callAgent(recentHistory, data, contextDoc);
+      const { parsed, rawJson } = await callAgent(recentHistory, freshData, freshCtx);
 
       if (parsed.actions && parsed.actions.length > 0) {
         onApplyActions(parsed.actions);

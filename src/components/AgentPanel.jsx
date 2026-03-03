@@ -13,7 +13,7 @@ function actionLabels(actions) {
   }).filter(Boolean);
 }
 
-export default function AgentPanel({ data, contextDoc, onApplyActions, isOpen, onToggle }) {
+export default function AgentPanel({ data, contextDoc, onApplyActions, isOpen, onToggle, refreshKey, onHistorySaved }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -23,6 +23,13 @@ export default function AgentPanel({ data, contextDoc, onApplyActions, isOpen, o
   useEffect(() => {
     loadAgentHistory().then(h => setMessages(h));
   }, []);
+
+  // Re-load history when another device has newer data
+  useEffect(() => {
+    if (refreshKey > 0) {
+      loadAgentHistory().then(h => setMessages(h));
+    }
+  }, [refreshKey]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -60,7 +67,7 @@ export default function AgentPanel({ data, contextDoc, onApplyActions, isOpen, o
       };
       const updated = [...newMessages, assistantMsg];
       setMessages(updated);
-      saveAgentHistory(updated);
+      saveAgentHistory(updated).then(ts => onHistorySaved?.(ts));
     } catch (err) {
       const errorMsg = { role: "assistant", content: `Error: ${err.message}`, actions: [] };
       setMessages(prev => [...prev, errorMsg]);
@@ -95,7 +102,7 @@ export default function AgentPanel({ data, contextDoc, onApplyActions, isOpen, o
         <span style={{ fontSize: "16px" }}>⬡</span>
         <span style={{ fontFamily: "'Space Mono', monospace", fontSize: "13px", fontWeight: 700, color: "#E5E5EA", flex: 1 }}>Agent</span>
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", color: "#4A4A4E" }}>context-aware</span>
-        <button onClick={() => { setMessages([]); saveAgentHistory([]); }} title="Clear history" style={{ background: "transparent", border: "none", color: "#3A3A3E", cursor: "pointer", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>clear</button>
+        <button onClick={() => { setMessages([]); saveAgentHistory([]).then(ts => onHistorySaved?.(ts)); }} title="Clear history" style={{ background: "transparent", border: "none", color: "#3A3A3E", cursor: "pointer", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>clear</button>
         <button onClick={onToggle} style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: "16px", padding: "0 4px" }}>×</button>
       </div>
 

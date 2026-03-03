@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
-import { DEFAULT_DATA } from "./lib/constants.js";
-import { loadData, saveData, loadContext, saveContext } from "./lib/storage.js";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { DEFAULT_DATA, STORAGE_KEY, CONTEXT_KEY, AGENT_HISTORY_KEY } from "./lib/constants.js";
+import { loadData, saveData, loadContext, saveContext, getTimestamp } from "./lib/storage.js";
 import { onAuthStateChange } from "./lib/auth.js";
 import DEFAULT_CONTEXT from "./context/default-context.md?raw";
 import Header from "./components/Header.jsx";
@@ -21,9 +21,15 @@ export default function App() {
   const [filter, setFilter] = useState("all");
   const [agentOpen, setAgentOpen] = useState(false);
   const [contextDoc, setContextDoc] = useState(DEFAULT_CONTEXT);
+  const [syncToast, setSyncToast] = useState(false);
+  const [agentRefreshKey, setAgentRefreshKey] = useState(0);
 
-  // Auth: onAuthStateChange emits INITIAL_SESSION on setup, then
-  // SIGNED_IN / SIGNED_OUT / TOKEN_REFRESHED as needed — single source of truth.
+  const dataRef = useRef(null);
+  const syncTimestamps = useRef({});
+
+  useEffect(() => { dataRef.current = data; }, [data]);
+
+  // ── Auth ────────────────────────────────────────────────────────
   useEffect(() => {
     const subscription = onAuthStateChange((s) => {
       setSession(s);
@@ -32,49 +38,174 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load data once when authenticated. Using !!session so token refreshes
-  // (which swap the session object but keep it truthy) don't re-fetch.
+  // ── Initial data load with timestamps ───────────────────────────
   const isAuthenticated = !!session;
   useEffect(() => {
     if (!isAuthenticated) {
-      // Reset on sign-out so re-login gets a clean slate
       setData(null);
       setLoading(true);
+      syncTimestamps.current = {};
       return;
     }
     setLoading(true);
-    Promise.all([loadData(), loadContext()]).then(([saved, ctx]) => {
-      setData(saved || DEFAULT_DATA);
+    Promise.all([
+      loadData(),
+      loadContext(),
+      getTimestamp(STORAGE_KEY),
+      getTimestamp(CONTEXT_KEY),
+      getTimestamp(AGENT_HISTORY_KEY),
+    ]).then(([saved, ctx, dataTs, ctxTs, histTs]) => {
+      const d = saved || DEFAULT_DATA;
+      setData(d);
+      dataRef.current = d;
       setContextDoc(ctx || DEFAULT_CONTEXT);
+      syncTimestamps.current = {
+        [STORAGE_KEY]: dataTs,
+        [CONTEXT_KEY]: ctxTs,
+        [AGENT_HISTORY_KEY]: histTs,
+      };
       setLoading(false);
     });
   }, [isAuthenticated]);
 
-  const persist = useCallback((newData) => { setData(newData); saveData(newData); }, []);
+  // ── Sync-before-write ───────────────────────────────────────────
+  // Accepts a mutation function: (currentData) => newData
+  // Optimistic update first, then checks for remote conflicts.
+  const persist = useCallback(async (mutate) => {
+    const optimistic = mutate(dataRef.current);
+    dataRef.current = optimistic;
+    setData(optimistic);
+
+    try {
+      const remoteTs = await getTimestamp(STORAGE_KEY);
+      const localTs = syncTimestamps.current[STORAGE_KEY];
+      const isStale = remoteTs && (!localTs || new Date(remoteTs) > new Date(localTs));
+
+      if (isStale) {
+        const fresh = await loadData() || DEFAULT_DATA;
+        const merged = mutate(fresh);
+        dataRef.current = merged;
+        setData(merged);
+        setSyncToast(true);
+        const ts = await saveData(merged);
+        if (ts) syncTimestamps.current[STORAGE_KEY] = ts;
+      } else {
+        const ts = await saveData(optimistic);
+        if (ts) syncTimestamps.current[STORAGE_KEY] = ts;
+      }
+    } catch (e) {
+      console.error("Sync-before-write failed:", e);
+      const ts = await saveData(optimistic);
+      if (ts) syncTimestamps.current[STORAGE_KEY] = ts;
+    }
+  }, []);
+
+  // ── Background refresh (focus / visibility) ─────────────────────
+  const refreshData = useCallback(async () => {
+    if (!dataRef.current) return;
+    try {
+      const [dataTs, ctxTs, histTs] = await Promise.all([
+        getTimestamp(STORAGE_KEY),
+        getTimestamp(CONTEXT_KEY),
+        getTimestamp(AGENT_HISTORY_KEY),
+      ]);
+
+      const dataStale = dataTs && (!syncTimestamps.current[STORAGE_KEY] || new Date(dataTs) > new Date(syncTimestamps.current[STORAGE_KEY]));
+      const ctxStale = ctxTs && (!syncTimestamps.current[CONTEXT_KEY] || new Date(ctxTs) > new Date(syncTimestamps.current[CONTEXT_KEY]));
+      const histStale = histTs && (!syncTimestamps.current[AGENT_HISTORY_KEY] || new Date(histTs) > new Date(syncTimestamps.current[AGENT_HISTORY_KEY]));
+
+      if (!dataStale && !ctxStale && !histStale) return;
+
+      const promises = [];
+
+      if (dataStale) {
+        promises.push(loadData().then(saved => {
+          if (saved) {
+            setData(saved);
+            dataRef.current = saved;
+          }
+          syncTimestamps.current[STORAGE_KEY] = dataTs;
+        }));
+      }
+
+      if (ctxStale) {
+        promises.push(loadContext().then(ctx => {
+          if (ctx != null) setContextDoc(ctx);
+          syncTimestamps.current[CONTEXT_KEY] = ctxTs;
+        }));
+      }
+
+      if (histStale) {
+        syncTimestamps.current[AGENT_HISTORY_KEY] = histTs;
+        setAgentRefreshKey(k => k + 1);
+      }
+
+      await Promise.all(promises);
+      setSyncToast(true);
+    } catch (e) {
+      console.error("Background refresh failed:", e);
+    }
+  }, []);
+
+  // Focus / visibility listeners (debounced 300ms)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let timeout;
+    const debouncedRefresh = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(refreshData, 300);
+    };
+    const handleFocus = () => debouncedRefresh();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") debouncedRefresh();
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [isAuthenticated, refreshData]);
+
+  // Auto-hide sync toast after 2s
+  useEffect(() => {
+    if (!syncToast) return;
+    const t = setTimeout(() => setSyncToast(false), 2000);
+    return () => clearTimeout(t);
+  }, [syncToast]);
+
+  // ── Handlers ────────────────────────────────────────────────────
 
   const handleStatusChange = (taskId, newStatus) => {
-    const d = { ...data, workstreams: data.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t) })) };
-    persist(d);
+    persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t) })) }));
   };
   const handleEdit = (taskId, updates) => {
-    const d = { ...data, workstreams: data.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t) })) };
-    persist(d);
+    persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t) })) }));
   };
   const handleDelete = (taskId) => {
-    const d = { ...data, workstreams: data.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.filter(t => t.id !== taskId) })) };
-    persist(d);
+    persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.filter(t => t.id !== taskId) })) }));
   };
   const handleAddTask = (wsId, task) => {
-    const d = { ...data, workstreams: data.workstreams.map(ws => ws.id === wsId ? { ...ws, tasks: [...ws.tasks, task] } : ws) };
-    persist(d);
+    persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ws.id === wsId ? { ...ws, tasks: [...ws.tasks, task] } : ws) }));
   };
-  const handleAddNote = (note) => { persist({ ...data, notes: [note, ...data.notes] }); };
-  const handleDeleteNote = (idx) => { persist({ ...data, notes: data.notes.filter((_, i) => i !== idx) }); };
-  const handleReset = () => { if (confirm("Reset all data to defaults? This cannot be undone.")) persist(DEFAULT_DATA); };
-  const handleContextSave = (text) => { setContextDoc(text); saveContext(text); };
+  const handleAddNote = (note) => {
+    persist(d => ({ ...d, notes: [note, ...d.notes] }));
+  };
+  const handleDeleteNote = (idx) => {
+    persist(d => ({ ...d, notes: d.notes.filter((_, i) => i !== idx) }));
+  };
+  const handleReset = () => {
+    if (confirm("Reset all data to defaults? This cannot be undone.")) persist(() => DEFAULT_DATA);
+  };
+  const handleContextSave = async (text) => {
+    setContextDoc(text);
+    const ts = await saveContext(text);
+    if (ts) syncTimestamps.current[CONTEXT_KEY] = ts;
+  };
 
   const handleAgentActions = useCallback((actions) => {
-    setData(prev => {
+    persist(prev => {
       let d = JSON.parse(JSON.stringify(prev));
       for (const action of actions) {
         if (action.type === "add_task" && action.workstream_id && action.task) {
@@ -95,10 +226,15 @@ export default function App() {
           d.notes = [{ text: action.text, ts: new Date().toISOString() }, ...d.notes];
         }
       }
-      saveData(d);
       return d;
     });
+  }, [persist]);
+
+  const handleHistorySaved = useCallback((ts) => {
+    if (ts) syncTimestamps.current[AGENT_HISTORY_KEY] = ts;
   }, []);
+
+  // ── Render ──────────────────────────────────────────────────────
 
   if (authLoading) {
     return <div style={{ minHeight: "100vh", background: "#0D0D0F", display: "flex", alignItems: "center", justifyContent: "center", color: "#6E6E73", fontFamily: "'Space Mono', monospace" }}>Loading...</div>;
@@ -148,7 +284,19 @@ export default function App() {
         )}
       </div>
 
-      <AgentPanel data={data} contextDoc={contextDoc} onApplyActions={handleAgentActions} isOpen={agentOpen} onToggle={() => setAgentOpen(!agentOpen)} />
+      <AgentPanel data={data} contextDoc={contextDoc} onApplyActions={handleAgentActions} isOpen={agentOpen} onToggle={() => setAgentOpen(!agentOpen)} refreshKey={agentRefreshKey} onHistorySaved={handleHistorySaved} />
+
+      {syncToast && (
+        <div style={{
+          position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)",
+          background: "#1C1C1E", border: "1px solid #2A4A2A", borderRadius: "8px",
+          padding: "8px 16px", color: "#6CC4A1", fontSize: "11px",
+          fontFamily: "'JetBrains Mono', monospace", zIndex: 200,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+        }}>
+          Synced latest changes
+        </div>
+      )}
     </div>
   );
 }

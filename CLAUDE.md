@@ -88,6 +88,17 @@ VITE_SUPABASE_ANON_KEY=...    # Supabase anonymous key
 ANTHROPIC_API_KEY=...          # Claude API key (server-side only, used in netlify function)
 ```
 
+## Deployment
+
+Netlify auto-deploys are disabled via `ignore = "exit 1"` in `netlify.toml`.
+
+When I say "deploy" or "ship it":
+1. Change `ignore = "exit 1"` to `ignore = "exit 0"` in `netlify.toml`
+2. Commit and push to main
+3. After confirming the push, change it back to `ignore = "exit 1"` and commit+push again
+
+This triggers exactly one Netlify build from the first push, then re-disables auto-deploy.
+
 ## Common Commands
 
 ```bash

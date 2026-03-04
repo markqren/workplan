@@ -189,6 +189,47 @@ export default function App() {
   const handleAddTask = (wsId, task) => {
     persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ws.id === wsId ? { ...ws, tasks: [...ws.tasks, task] } : ws) }));
   };
+  const handleToggleSubtask = (taskId, subtaskId) => {
+    persist(d => ({
+      ...d,
+      workstreams: d.workstreams.map(ws => ({
+        ...ws,
+        tasks: ws.tasks.map(t => {
+          if (t.id !== taskId) return t;
+          const subtasks = (t.subtasks || []).map(s =>
+            s.id === subtaskId ? { ...s, done: !s.done } : s
+          );
+          const allDone = subtasks.length > 0 && subtasks.every(s => s.done);
+          return { ...t, subtasks, ...(allDone ? { status: "DONE" } : {}) };
+        }),
+      })),
+    }));
+  };
+  const handleAddSubtask = (taskId, title) => {
+    persist(d => ({
+      ...d,
+      workstreams: d.workstreams.map(ws => ({
+        ...ws,
+        tasks: ws.tasks.map(t => {
+          if (t.id !== taskId) return t;
+          const existing = t.subtasks || [];
+          const suffix = String.fromCharCode(97 + existing.length); // a, b, c...
+          return { ...t, subtasks: [...existing, { id: `${taskId}${suffix}`, title, done: false }] };
+        }),
+      })),
+    }));
+  };
+  const handleDeleteSubtask = (taskId, subtaskId) => {
+    persist(d => ({
+      ...d,
+      workstreams: d.workstreams.map(ws => ({
+        ...ws,
+        tasks: ws.tasks.map(t =>
+          t.id !== taskId ? t : { ...t, subtasks: (t.subtasks || []).filter(s => s.id !== subtaskId) }
+        ),
+      })),
+    }));
+  };
   const handleAddNote = (note) => {
     persist(d => ({ ...d, notes: [note, ...d.notes] }));
   };
@@ -224,6 +265,35 @@ export default function App() {
         }
         if (action.type === "add_note" && action.text) {
           d.notes = [{ text: action.text, ts: new Date().toISOString() }, ...d.notes];
+        }
+        if (action.type === "add_subtask" && action.task_id && action.title) {
+          for (const ws of d.workstreams) {
+            ws.tasks = ws.tasks.map(t => {
+              if (t.id !== action.task_id) return t;
+              const existing = t.subtasks || [];
+              const suffix = String.fromCharCode(97 + existing.length);
+              return { ...t, subtasks: [...existing, { id: `${t.id}${suffix}`, title: action.title, done: false }] };
+            });
+          }
+        }
+        if (action.type === "toggle_subtask" && action.task_id && action.subtask_id) {
+          for (const ws of d.workstreams) {
+            ws.tasks = ws.tasks.map(t => {
+              if (t.id !== action.task_id) return t;
+              const subtasks = (t.subtasks || []).map(s =>
+                s.id === action.subtask_id ? { ...s, done: !s.done } : s
+              );
+              const allDone = subtasks.length > 0 && subtasks.every(s => s.done);
+              return { ...t, subtasks, ...(allDone ? { status: "DONE" } : {}) };
+            });
+          }
+        }
+        if (action.type === "delete_subtask" && action.task_id && action.subtask_id) {
+          for (const ws of d.workstreams) {
+            ws.tasks = ws.tasks.map(t =>
+              t.id !== action.task_id ? t : { ...t, subtasks: (t.subtasks || []).filter(s => s.id !== action.subtask_id) }
+            );
+          }
         }
       }
       return d;
@@ -281,7 +351,7 @@ export default function App() {
           <>
             <StatsBar workstreams={data.workstreams} />
             {filteredWorkstreams.map(ws => (
-              <Workstream key={ws.id} ws={ws} onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} />
+              <Workstream key={ws.id} ws={ws} onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
             ))}
             <div style={{ marginTop: "24px", background: "#18181B", borderRadius: "10px", padding: "16px", border: "1px solid #2A2A2E" }}>
               <div style={{ fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Quick Notes</div>

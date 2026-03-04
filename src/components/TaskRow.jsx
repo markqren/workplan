@@ -26,19 +26,60 @@ function TypeTag({ type }) {
   );
 }
 
-export default function TaskRow({ task, onStatusChange, onEdit, onDelete }) {
+function SubtaskCheckbox({ checked, onChange }) {
+  return (
+    <button onClick={onChange} style={{
+      width: "14px", height: "14px", borderRadius: "3px", border: `1px solid ${checked ? "#6CC4A1" : "#4A4A4E"}`,
+      background: checked ? "#6CC4A1" : "transparent", cursor: "pointer", padding: 0, flexShrink: 0,
+      display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s ease",
+    }}>
+      {checked && <span style={{ color: "#0D0D0F", fontSize: "10px", lineHeight: 1 }}>✓</span>}
+    </button>
+  );
+}
+
+export default function TaskRow({ task, onStatusChange, onEdit, onDelete, onToggleSubtask, onAddSubtask, onDeleteSubtask }) {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const [editTarget, setEditTarget] = useState(task.target);
+  const [editSubtasks, setEditSubtasks] = useState(task.subtasks || []);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [hoveredSubtask, setHoveredSubtask] = useState(null);
+
+  const subtasks = task.subtasks || [];
+  const doneCount = subtasks.filter(s => s.done).length;
 
   const cycleStatus = () => {
     const idx = STATUSES.indexOf(task.status);
     onStatusChange(task.id, STATUSES[(idx + 1) % STATUSES.length]);
   };
 
+  const startEditing = () => {
+    setEditTitle(task.title);
+    setEditTarget(task.target);
+    setEditSubtasks((task.subtasks || []).map(s => ({ ...s })));
+    setNewSubtaskTitle("");
+    setEditing(true);
+  };
+
   const handleSave = () => {
-    onEdit(task.id, { title: editTitle, target: editTarget });
+    onEdit(task.id, { title: editTitle, target: editTarget, subtasks: editSubtasks });
     setEditing(false);
+  };
+
+  const handleEditSubtaskTitle = (idx, title) => {
+    setEditSubtasks(prev => prev.map((s, i) => i === idx ? { ...s, title } : s));
+  };
+
+  const handleDeleteEditSubtask = (idx) => {
+    setEditSubtasks(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleAddEditSubtask = () => {
+    if (!newSubtaskTitle.trim()) return;
+    const suffix = String.fromCharCode(97 + editSubtasks.length);
+    setEditSubtasks(prev => [...prev, { id: `${task.id}${suffix}`, title: newSubtaskTitle.trim(), done: false }]);
+    setNewSubtaskTitle("");
   };
 
   if (editing) {
@@ -50,6 +91,30 @@ export default function TaskRow({ task, onStatusChange, onEdit, onDelete }) {
           <span style={{ fontSize: "11px", color: "#6E6E73" }}>Target:</span>
           <input value={editTarget} onChange={e => setEditTarget(e.target.value)}
             style={{ background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace", width: "100px" }} />
+        </div>
+
+        {/* Sub-tasks section */}
+        <div style={{ marginTop: "12px" }}>
+          <span style={{ fontSize: "11px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.5px" }}>Sub-tasks</span>
+          <div style={{ marginTop: "6px" }}>
+            {editSubtasks.map((s, i) => (
+              <div key={s.id || i} style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
+                <input value={s.title} onChange={e => handleEditSubtaskTitle(i, e.target.value)}
+                  style={{ flex: 1, background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }} />
+                <button onClick={() => handleDeleteEditSubtask(i)} style={{ background: "transparent", border: "none", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>×</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "4px" }}>
+              <input value={newSubtaskTitle} onChange={e => setNewSubtaskTitle(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAddEditSubtask()}
+                placeholder="＋ add sub-task"
+                style={{ flex: 1, background: "#0D0D0F", color: "#E5E5EA", border: "1px dashed #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }} />
+              <button onClick={handleAddEditSubtask} style={{ background: "transparent", border: "1px solid #3A3A3E", color: "#6E6E73", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", cursor: "pointer" }}>+</button>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "8px", marginTop: "12px", alignItems: "center" }}>
           <div style={{ flex: 1 }} />
           <button onClick={handleSave} style={{ background: "#6CC4A1", color: "#0D0D0F", border: "none", borderRadius: "4px", padding: "4px 12px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Save</button>
           <button onClick={() => setEditing(false)} style={{ background: "transparent", color: "#6E6E73", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 12px", fontSize: "11px", cursor: "pointer" }}>Cancel</button>
@@ -70,17 +135,50 @@ export default function TaskRow({ task, onStatusChange, onEdit, onDelete }) {
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "#8E8E93", fontWeight: 600 }}>{task.id}</span>
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ marginBottom: "4px" }}>
+        <div style={{ marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
           <TypeTag type={task.type} />
           <span style={{ fontSize: "11px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace" }}>→ {task.target}</span>
+          {subtasks.length > 0 && (
+            <span style={{ fontSize: "10px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace" }}>
+              {doneCount}/{subtasks.length}
+            </span>
+          )}
         </div>
         <div style={{ fontSize: "13px", color: task.status === "DONE" ? "#6E6E73" : "#E5E5EA", lineHeight: 1.5, fontFamily: "'DM Sans', sans-serif", textDecoration: task.status === "DONE" ? "line-through" : "none" }}>
           {task.title}
         </div>
+        {/* Sub-tasks checklist */}
+        {subtasks.length > 0 && (
+          <div style={{ marginTop: "6px", paddingLeft: "20px" }}>
+            {subtasks.map(s => (
+              <div key={s.id}
+                onMouseEnter={() => setHoveredSubtask(s.id)}
+                onMouseLeave={() => setHoveredSubtask(null)}
+                style={{
+                  display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
+                }}>
+                <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
+                <span style={{
+                  fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
+                  color: s.done ? "#6E6E73" : "#C5C5CA",
+                  textDecoration: s.done ? "line-through" : "none",
+                  opacity: s.done ? 0.6 : 1,
+                  flex: 1,
+                }}>{s.title}</span>
+                {hoveredSubtask === s.id && (
+                  <button onClick={() => onDeleteSubtask(task.id, s.id)} style={{
+                    background: "transparent", border: "none", color: "#4A2020", cursor: "pointer",
+                    fontSize: "12px", padding: "0 2px", lineHeight: 1,
+                  }}>×</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
         <StatusBadge status={task.status} onClick={cycleStatus} />
-        <button onClick={() => setEditing(true)} title="Edit" style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>✎</button>
+        <button onClick={startEditing} title="Edit" style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>✎</button>
         <button onClick={() => onDelete(task.id)} title="Delete" style={{ background: "transparent", border: "none", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>×</button>
       </div>
     </div>

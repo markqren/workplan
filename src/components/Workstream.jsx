@@ -1,7 +1,7 @@
 import { useState } from "react";
 import TaskRow from "./TaskRow.jsx";
 
-export default function Workstream({ ws, onStatusChange, onEdit, onDelete, onAddTask }) {
+export default function Workstream({ ws, onStatusChange, onEdit, onDelete, onAddTask, onToggleSubtask, onAddSubtask, onDeleteSubtask }) {
   const [collapsed, setCollapsed] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -46,7 +46,7 @@ export default function Workstream({ ws, onStatusChange, onEdit, onDelete, onAdd
       {!collapsed && (
         <div style={{ paddingLeft: "8px" }}>
           {ws.tasks.map(task => (
-            <TaskRow key={task.id} task={task} onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} />
+            <TaskRow key={task.id} task={task} onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onToggleSubtask={onToggleSubtask} onAddSubtask={onAddSubtask} onDeleteSubtask={onDeleteSubtask} />
           ))}
           {adding ? (
             <div style={{ padding: "12px 16px", background: "#1C1C1E", borderRadius: "8px", border: "1px dashed #3A3A3E", marginTop: "4px" }}>

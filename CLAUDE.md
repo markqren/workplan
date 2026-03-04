@@ -42,9 +42,14 @@ The app uses three persistent storage keys:
   type: "D",          // N=Narrative, D=Data/SQL, A=Advisory, --=Misc
   title: "...",
   status: "IN PROGRESS",  // NOT STARTED | IN PROGRESS | WAITING | DONE
-  target: "Mon-Tue"
+  target: "Mon-Tue",
+  subtasks: [         // optional — omit if no sub-tasks
+    { id: "SEG-5a", title: "Pull raw data", done: true },
+    { id: "SEG-5b", title: "Join tables", done: false },
+  ]
 }
 ```
+Sub-task IDs use letter suffixes (a, b, c...) on the parent ID. When all subtasks are checked done, the parent auto-sets to DONE.
 
 ### Workstream Model
 ```
@@ -64,7 +69,7 @@ The agent gets a system prompt composed of three parts:
 2. **Current tracker state** (injected on every call as JSON)
 3. **Fixed instructions** (hardcoded) — response format, available actions, behavior guidelines
 
-The agent responds with JSON: `{ "message": "...", "actions": [...] }` where actions can be `add_task`, `update_task`, `delete_task`, or `add_note`. The app parses the response and applies actions to the tracker state.
+The agent responds with JSON: `{ "message": "...", "actions": [...] }` where actions can be `add_task`, `update_task`, `delete_task`, `add_note`, `add_subtask`, `toggle_subtask`, or `delete_subtask`. The app parses the response and applies actions to the tracker state.
 
 ### Three Views
 - **Tasks** — Main view with stats bar, collapsible workstreams, task rows, quick notes
@@ -90,14 +95,11 @@ ANTHROPIC_API_KEY=...          # Claude API key (server-side only, used in netli
 
 ## Deployment
 
-Netlify auto-deploys are disabled via `ignore = "exit 1"` in `netlify.toml`.
+Netlify auto-deploys are disabled via `ignore = "exit 0"` in `netlify.toml` (exit 0 = "yes, ignore this build" = skip).
 
 When I say "deploy" or "ship it":
-1. Change `ignore = "exit 1"` to `ignore = "exit 0"` in `netlify.toml`
-2. Commit and push to main
-3. After confirming the push, change it back to `ignore = "exit 1"` and commit+push again
-
-This triggers exactly one Netlify build from the first push, then re-disables auto-deploy.
+1. Commit and push to main
+2. Run `npx netlify-cli deploy --prod` to deploy manually
 
 ## Common Commands
 

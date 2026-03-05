@@ -39,7 +39,12 @@ export default function AgentPanel({ onApplyActions, isOpen, onToggle, refreshKe
   }, [messages]);
 
   useEffect(() => {
-    if (isOpen) setTimeout(() => inputRef.current?.focus(), 100);
+    if (isOpen) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+        messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
+      }, 100);
+    }
   }, [isOpen]);
 
   const sendMessage = async () => {

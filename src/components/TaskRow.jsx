@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { STATUS_CONFIG, TYPE_LABELS, TYPE_ICONS, STATUSES } from "../lib/constants.js";
+import { useIsMobile } from "../hooks/useMediaQuery.js";
 
-function StatusBadge({ status, onClick }) {
+function StatusBadge({ status, onClick, mobile }) {
   const c = STATUS_CONFIG[status] || STATUS_CONFIG["NOT STARTED"];
   return (
     <button onClick={onClick} style={{
       background: c.bg, color: c.fg, border: `1px solid ${c.border}`,
-      padding: "3px 10px", borderRadius: "4px", fontSize: "10px",
+      padding: mobile ? "6px 12px" : "3px 10px", borderRadius: "4px", fontSize: "10px",
       fontWeight: 600, letterSpacing: "0.5px", cursor: "pointer",
       textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace",
-      transition: "all 0.15s ease",
+      transition: "all 0.15s ease", minHeight: mobile ? "44px" : "auto",
     }}>{status}</button>
   );
 }
@@ -38,7 +39,8 @@ function SubtaskCheckbox({ checked, onChange }) {
   );
 }
 
-export default function TaskRow({ task, onStatusChange, onEdit, onDelete, onToggleSubtask, onAddSubtask, onDeleteSubtask }) {
+export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelete, onToggleSubtask, onAddSubtask, onDeleteSubtask }) {
+  const mobile = useIsMobile();
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const [editTarget, setEditTarget] = useState(task.target);
@@ -107,7 +109,7 @@ export default function TaskRow({ task, onStatusChange, onEdit, onDelete, onTogg
               <div key={s.id || i} style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
                 <input value={s.title} onChange={e => handleEditSubtaskTitle(i, e.target.value)}
                   style={{ flex: 1, background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }} />
-                <button onClick={() => handleDeleteEditSubtask(i)} style={{ background: "transparent", border: "none", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>×</button>
+                <button onClick={() => handleDeleteEditSubtask(i)} style={{ background: "transparent", border: "none", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "2px 4px", minWidth: mobile ? "44px" : "auto", minHeight: mobile ? "44px" : "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
               </div>
             ))}
             <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "4px" }}>
@@ -161,8 +163,8 @@ export default function TaskRow({ task, onStatusChange, onEdit, onDelete, onTogg
 
         <div style={{ display: "flex", gap: "8px", marginTop: "12px", alignItems: "center" }}>
           <div style={{ flex: 1 }} />
-          <button onClick={handleSave} style={{ background: "#6CC4A1", color: "#0D0D0F", border: "none", borderRadius: "4px", padding: "4px 12px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Save</button>
-          <button onClick={() => setEditing(false)} style={{ background: "transparent", color: "#6E6E73", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 12px", fontSize: "11px", cursor: "pointer" }}>Cancel</button>
+          <button onClick={handleSave} style={{ background: "#6CC4A1", color: "#0D0D0F", border: "none", borderRadius: "4px", padding: mobile ? "8px 16px" : "4px 12px", fontSize: "11px", fontWeight: 600, cursor: "pointer", minHeight: mobile ? "44px" : "auto" }}>Save</button>
+          <button onClick={() => setEditing(false)} style={{ background: "transparent", color: "#6E6E73", border: "1px solid #3A3A3E", borderRadius: "4px", padding: mobile ? "8px 16px" : "4px 12px", fontSize: "11px", cursor: "pointer", minHeight: mobile ? "44px" : "auto" }}>Cancel</button>
         </div>
       </div>
     );
@@ -170,85 +172,113 @@ export default function TaskRow({ task, onStatusChange, onEdit, onDelete, onTogg
 
   return (
     <div style={{
-      display: "flex", alignItems: "flex-start", gap: "12px", padding: "10px 14px",
+      display: "flex", alignItems: mobile ? "stretch" : "flex-start", flexDirection: mobile ? "column" : "row",
+      gap: mobile ? "8px" : "12px", padding: mobile ? "10px 12px" : "10px 14px",
       background: task.status === "DONE" ? "#111114" : "#1C1C1E",
-      borderRadius: "8px", marginBottom: "4px", transition: "all 0.15s ease",
+      borderRadius: "8px", marginBottom: "6px", transition: "all 0.15s ease",
       opacity: task.status === "DONE" ? 0.55 : 1,
-      borderLeft: `3px solid ${STATUS_CONFIG[task.status]?.fg || "#3A3A3E"}`,
+      borderLeft: `3px solid ${wsColor || STATUS_CONFIG[task.status]?.fg || "#3A3A3E"}`,
     }}>
-      <div style={{ minWidth: "64px" }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "#8E8E93", fontWeight: 600 }}>{task.id}</span>
-      </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
-          <TypeTag type={task.type} />
-          <span style={{ fontSize: "11px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace" }}>→ {task.target}</span>
-          {subtasks.length > 0 && (
-            <span style={{ fontSize: "10px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace" }}>
-              {doneCount}/{subtasks.length}
-            </span>
-          )}
-        </div>
-        <div style={{ fontSize: "13px", color: task.status === "DONE" ? "#6E6E73" : "#E5E5EA", lineHeight: 1.5, fontFamily: "'DM Sans', sans-serif", textDecoration: task.status === "DONE" ? "line-through" : "none" }}>
-          {task.title}
-        </div>
-        {/* Sub-tasks checklist */}
-        {subtasks.length > 0 && (
-          <div style={{ marginTop: "6px", paddingLeft: "20px" }}>
-            {subtasks.map(s => (
-              <div key={s.id}
-                onMouseEnter={() => setHoveredSubtask(s.id)}
-                onMouseLeave={() => setHoveredSubtask(null)}
-                style={{
-                  display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
-                }}>
-                <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
-                <span style={{
-                  fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
-                  color: s.done ? "#6E6E73" : "#C5C5CA",
-                  textDecoration: s.done ? "line-through" : "none",
-                  opacity: s.done ? 0.6 : 1,
-                  flex: 1,
-                }}>{s.title}</span>
-                {(() => {
-                  const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
-                  return linkedDoc ? (
-                    <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
-                      style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7, flexShrink: 0 }}
-                      onClick={e => e.stopPropagation()}>📄</a>
-                  ) : null;
-                })()}
-                {hoveredSubtask === s.id && (
-                  <button onClick={() => onDeleteSubtask(task.id, s.id)} style={{
-                    background: "transparent", border: "none", color: "#4A2020", cursor: "pointer",
-                    fontSize: "12px", padding: "0 2px", lineHeight: 1,
-                  }}>×</button>
-                )}
-              </div>
-            ))}
+      {mobile ? (
+        <>
+          {/* Mobile: top row with ID, type, target, status, actions */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "#8E8E93", fontWeight: 600 }}>{task.id}</span>
+            <TypeTag type={task.type} />
+            <span style={{ fontSize: "11px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace" }}>→ {task.target}</span>
+            {subtasks.length > 0 && (
+              <span style={{ fontSize: "10px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace" }}>{doneCount}/{subtasks.length}</span>
+            )}
+            <div style={{ flex: 1 }} />
+            <StatusBadge status={task.status} onClick={cycleStatus} mobile={mobile} />
           </div>
-        )}
-        {/* Related Documents */}
-        {task.documents && task.documents.length > 0 && (
-          <div style={{ marginTop: "6px", paddingLeft: "20px" }}>
-            <span style={{ fontSize: "9px", color: "#4A4A4E", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.5px" }}>📎 related docs</span>
-            {task.documents.map(doc => (
-              <div key={doc.id} style={{ padding: "2px 0" }}>
-                <a href={doc.url} target="_blank" rel="noopener noreferrer"
-                  style={{ fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", color: "#5B8DEF", textDecoration: "none" }}
-                  onMouseEnter={e => e.target.style.textDecoration = "underline"}
-                  onMouseLeave={e => e.target.style.textDecoration = "none"}
-                >{doc.label} <span style={{ fontSize: "9px", opacity: 0.6 }}>↗</span></a>
-              </div>
-            ))}
+          {/* Title */}
+          <div style={{ fontSize: "13px", color: task.status === "DONE" ? "#6E6E73" : "#E5E5EA", lineHeight: 1.5, fontFamily: "'DM Sans', sans-serif", textDecoration: task.status === "DONE" ? "line-through" : "none" }}>
+            {task.title}
           </div>
-        )}
-      </div>
-      <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
-        <StatusBadge status={task.status} onClick={cycleStatus} />
-        <button onClick={startEditing} title="Edit" style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>✎</button>
-        <button onClick={() => onDelete(task.id)} title="Delete" style={{ background: "transparent", border: "none", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>×</button>
-      </div>
+          {/* Actions row */}
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <button onClick={startEditing} title="Edit" style={{ background: "transparent", border: "1px solid #2A2A2E", color: "#6E6E73", cursor: "pointer", fontSize: "14px", padding: "8px 12px", borderRadius: "4px", minHeight: "44px" }}>✎</button>
+            <button onClick={() => onDelete(task.id)} title="Delete" style={{ background: "transparent", border: "1px solid #2A2A2E", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "8px 12px", borderRadius: "4px", minHeight: "44px" }}>×</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ minWidth: "64px" }}>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "11px", color: "#8E8E93", fontWeight: 600 }}>{task.id}</span>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+              <TypeTag type={task.type} />
+              <span style={{ fontSize: "11px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace" }}>→ {task.target}</span>
+              {subtasks.length > 0 && (
+                <span style={{ fontSize: "10px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace" }}>
+                  {doneCount}/{subtasks.length}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: "13px", color: task.status === "DONE" ? "#6E6E73" : "#E5E5EA", lineHeight: 1.5, fontFamily: "'DM Sans', sans-serif", textDecoration: task.status === "DONE" ? "line-through" : "none" }}>
+              {task.title}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
+            <StatusBadge status={task.status} onClick={cycleStatus} mobile={false} />
+            <button onClick={startEditing} title="Edit" style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>✎</button>
+            <button onClick={() => onDelete(task.id)} title="Delete" style={{ background: "transparent", border: "none", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>×</button>
+          </div>
+        </>
+      )}
+      {/* Sub-tasks checklist — shared between mobile and desktop */}
+      {subtasks.length > 0 && (
+        <div style={{ paddingLeft: mobile ? "8px" : "20px", ...(mobile ? {} : { gridColumn: "1 / -1", marginTop: "-4px" }) }}>
+          {subtasks.map(s => (
+            <div key={s.id}
+              onMouseEnter={() => setHoveredSubtask(s.id)}
+              onMouseLeave={() => setHoveredSubtask(null)}
+              style={{
+                display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
+              }}>
+              <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
+              <span style={{
+                fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
+                color: s.done ? "#6E6E73" : "#C5C5CA",
+                textDecoration: s.done ? "line-through" : "none",
+                opacity: s.done ? 0.6 : 1,
+                flex: 1,
+              }}>{s.title}</span>
+              {(() => {
+                const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
+                return linkedDoc ? (
+                  <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
+                    style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7, flexShrink: 0 }}
+                    onClick={e => e.stopPropagation()}>📄</a>
+                ) : null;
+              })()}
+              {hoveredSubtask === s.id && (
+                <button onClick={() => onDeleteSubtask(task.id, s.id)} style={{
+                  background: "transparent", border: "none", color: "#4A2020", cursor: "pointer",
+                  fontSize: "12px", padding: "0 2px", lineHeight: 1,
+                }}>×</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Related Documents */}
+      {task.documents && task.documents.length > 0 && (
+        <div style={{ paddingLeft: mobile ? "8px" : "20px" }}>
+          <span style={{ fontSize: "9px", color: "#4A4A4E", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.5px" }}>📎 related docs</span>
+          {task.documents.map(doc => (
+            <div key={doc.id} style={{ padding: "2px 0" }}>
+              <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", color: "#5B8DEF", textDecoration: "none" }}
+                onMouseEnter={e => e.target.style.textDecoration = "underline"}
+                onMouseLeave={e => e.target.style.textDecoration = "none"}
+              >{doc.label} <span style={{ fontSize: "9px", opacity: 0.6 }}>↗</span></a>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

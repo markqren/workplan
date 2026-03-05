@@ -3,6 +3,7 @@ import { DEFAULT_DATA, STORAGE_KEY, CONTEXT_KEY, AGENT_HISTORY_KEY } from "./lib
 import { loadData, saveData, loadContext, saveContext, getTimestamp } from "./lib/storage.js";
 import { onAuthStateChange } from "./lib/auth.js";
 import DEFAULT_CONTEXT from "./context/default-context.md?raw";
+import { useIsMobile } from "./hooks/useMediaQuery.js";
 import Header from "./components/Header.jsx";
 import StatsBar from "./components/StatsBar.jsx";
 import Workstream from "./components/Workstream.jsx";
@@ -251,6 +252,27 @@ export default function App() {
     undoEpoch.current++;
     if (confirm("Reset all data to defaults? This cannot be undone.")) persist(() => DEFAULT_DATA);
   };
+  const handleUpdateDay = (index, updates) => {
+    undoEpoch.current++;
+    persist(d => ({
+      ...d,
+      weekShape: d.weekShape.map((day, i) => i === index ? { ...day, ...updates } : day)
+    }));
+  };
+  const handleAddDay = () => {
+    undoEpoch.current++;
+    persist(d => ({
+      ...d,
+      weekShape: [...d.weekShape, { day: "New Day", focus: "TBD", activities: "" }]
+    }));
+  };
+  const handleRemoveDay = (index) => {
+    undoEpoch.current++;
+    persist(d => ({
+      ...d,
+      weekShape: d.weekShape.filter((_, i) => i !== index)
+    }));
+  };
   const handleContextSave = async (text) => {
     setContextDoc(text);
     const ts = await saveContext(text);
@@ -396,23 +418,32 @@ export default function App() {
     return <div style={{ minHeight: "100vh", background: "#0D0D0F", display: "flex", alignItems: "center", justifyContent: "center", color: "#6E6E73", fontFamily: "'Space Mono', monospace" }}>Loading...</div>;
   }
 
+  const mobile = useIsMobile();
+
   const filteredWorkstreams = data.workstreams.map(ws => ({
     ...ws,
     tasks: filter === "all" ? ws.tasks : filter === "active" ? ws.tasks.filter(t => t.status !== "DONE") : ws.tasks.filter(t => t.status === "DONE"),
-  })).filter(ws => ws.tasks.length > 0);
+  }));
+  const visibleWorkstreams = filteredWorkstreams.filter(ws => ws.tasks.length > 0);
+  // For empty filter states: workstreams that have tasks in the unfiltered data but none after filtering
+  const emptyFilteredWorkstreams = filter !== "all" ? filteredWorkstreams.filter(ws => ws.tasks.length === 0 && data.workstreams.find(w => w.id === ws.id)?.tasks.length > 0) : [];
 
   return (
     <div style={{ minHeight: "100vh", background: "#0D0D0F", color: "#E5E5EA", fontFamily: "'DM Sans', sans-serif" }}>
       <Header data={data} view={view} setView={setView} filter={filter} setFilter={setFilter} onReset={handleReset} />
 
-      <div style={{ padding: "24px 32px", maxWidth: "900px" }}>
+      <div style={{ padding: mobile ? "16px" : "24px 32px", maxWidth: "960px" }}>
         {view === "tasks" && (
           <>
             <StatsBar workstreams={data.workstreams} />
-            {filteredWorkstreams.map(ws => (
+            {visibleWorkstreams.map(ws => (
               <Workstream key={ws.id} ws={ws} onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
             ))}
-            <div style={{ marginTop: "24px", background: "#18181B", borderRadius: "10px", padding: "16px", border: "1px solid #2A2A2E" }}>
+            {emptyFilteredWorkstreams.map(ws => (
+              <Workstream key={ws.id} ws={ws} emptyFilterMessage="No tasks match this filter" onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
+            ))}
+            <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, #2A2A2E, transparent)", margin: "16px 0" }} />
+            <div style={{ background: "#18181B", borderRadius: "10px", padding: "16px", border: "1px solid #2A2A2E" }}>
               <div style={{ fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Quick Notes</div>
               <QuickNotes notes={data.notes} onAdd={handleAddNote} onDelete={handleDeleteNote} />
             </div>
@@ -420,7 +451,8 @@ export default function App() {
         )}
         {view === "week" && (
           <>
-            <WeekShape weekShape={data.weekShape} />
+            <WeekShape weekShape={data.weekShape} workstreams={data.workstreams} onUpdateDay={handleUpdateDay} onAddDay={handleAddDay} onRemoveDay={handleRemoveDay} />
+            <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, #2A2A2E, transparent)", margin: "8px 0" }} />
             <div style={{ marginTop: "16px", background: "#18181B", borderRadius: "10px", padding: "16px", border: "1px solid #2A2A2E" }}>
               <div style={{ fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Quick Notes</div>
               <QuickNotes notes={data.notes} onAdd={handleAddNote} onDelete={handleDeleteNote} />

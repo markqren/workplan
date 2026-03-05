@@ -22,3 +22,14 @@ body {
 .agent-thinking {
   animation: agentPulse 1s ease-in-out infinite;
 }
+
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+
+  /* Prevent horizontal overflow on mobile */
+  #root {
+    overflow-x: hidden;
+  }
+}

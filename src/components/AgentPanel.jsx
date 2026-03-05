@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { loadAgentHistory, saveAgentHistory } from "../lib/storage.js";
 import { callAgent } from "../lib/agent.js";
+import { useIsMobile } from "../hooks/useMediaQuery.js";
 
 function actionLabels(actions) {
   if (!actions || actions.length === 0) return [];
@@ -17,6 +18,7 @@ function actionLabels(actions) {
 }
 
 export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages, isOpen, onToggle, refreshKey, onHistorySaved, getFreshData }) {
+  const mobile = useIsMobile();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -116,20 +118,19 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
     );
   }
 
+  const panelStyle = mobile
+    ? { position: "fixed", inset: 0, background: "#131316", display: "flex", flexDirection: "column", zIndex: 100 }
+    : { position: "fixed", bottom: "24px", right: "24px", width: "420px", height: "520px", background: "#131316", borderRadius: "16px", border: "1px solid #2A2A2E", display: "flex", flexDirection: "column", zIndex: 100, boxShadow: "0 8px 40px rgba(0,0,0,0.6)" };
+
   return (
-    <div style={{
-      position: "fixed", bottom: "24px", right: "24px", width: "420px", height: "520px",
-      background: "#131316", borderRadius: "16px", border: "1px solid #2A2A2E",
-      display: "flex", flexDirection: "column", zIndex: 100,
-      boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
-    }}>
+    <div style={panelStyle}>
       {/* Header */}
       <div style={{ padding: "14px 18px", borderBottom: "1px solid #2A2A2E", display: "flex", alignItems: "center", gap: "10px" }}>
         <span style={{ fontSize: "16px" }}>⬡</span>
         <span style={{ fontFamily: "'Space Mono', monospace", fontSize: "13px", fontWeight: 700, color: "#E5E5EA", flex: 1 }}>Agent</span>
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", color: "#4A4A4E" }}>context-aware</span>
         <button onClick={() => { setMessages([]); saveAgentHistory([]).then(ts => onHistorySaved?.(ts)); }} title="Clear history" style={{ background: "transparent", border: "none", color: "#3A3A3E", cursor: "pointer", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>clear</button>
-        <button onClick={onToggle} style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: "16px", padding: "0 4px" }}>×</button>
+        <button onClick={onToggle} style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: mobile ? "20px" : "16px", padding: "0 4px", minWidth: mobile ? "44px" : "auto", minHeight: mobile ? "44px" : "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
       </div>
 
       {/* Messages */}
@@ -195,23 +196,25 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
       </div>
 
       {/* Input */}
-      <div style={{ padding: "12px 14px", borderTop: "1px solid #2A2A2E" }}>
+      <div style={{ padding: mobile ? "12px 14px 24px" : "12px 14px", borderTop: "1px solid #2A2A2E" }}>
         <div style={{ display: "flex", gap: "8px" }}>
           <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
             placeholder="Tell me what to do..."
             style={{
               flex: 1, background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #2A2A2E",
-              borderRadius: "8px", padding: "10px 14px", fontSize: "13px",
+              borderRadius: "8px", padding: mobile ? "12px 14px" : "10px 14px", fontSize: "13px",
               fontFamily: "'DM Sans', sans-serif", outline: "none",
+              minHeight: mobile ? "44px" : "auto",
             }}
             onFocus={e => e.target.style.borderColor = "#E8A838"}
             onBlur={e => e.target.style.borderColor = "#2A2A2E"}
           />
           <button onClick={sendMessage} disabled={loading || !input.trim()} style={{
             background: input.trim() ? "linear-gradient(135deg, #E8A838, #E85B5B)" : "#2A2A2E",
-            border: "none", borderRadius: "8px", padding: "0 16px", cursor: input.trim() ? "pointer" : "default",
+            border: "none", borderRadius: "8px", padding: mobile ? "0 20px" : "0 16px", cursor: input.trim() ? "pointer" : "default",
             color: input.trim() ? "#0D0D0F" : "#4A4A4E", fontWeight: 700, fontSize: "14px",
+            minHeight: mobile ? "44px" : "auto",
           }}>→</button>
         </div>
       </div>

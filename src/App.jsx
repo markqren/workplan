@@ -26,6 +26,8 @@ export default function App() {
 
   const dataRef = useRef(null);
   const syncTimestamps = useRef({});
+  const undoBuffer = useRef([]);
+  const undoEpoch = useRef(0);
 
   useEffect(() => { dataRef.current = data; }, [data]);
 
@@ -178,18 +180,23 @@ export default function App() {
   // ── Handlers ────────────────────────────────────────────────────
 
   const handleStatusChange = (taskId, newStatus) => {
+    undoEpoch.current++;
     persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t) })) }));
   };
   const handleEdit = (taskId, updates) => {
+    undoEpoch.current++;
     persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t) })) }));
   };
   const handleDelete = (taskId) => {
+    undoEpoch.current++;
     persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.filter(t => t.id !== taskId) })) }));
   };
   const handleAddTask = (wsId, task) => {
+    undoEpoch.current++;
     persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ws.id === wsId ? { ...ws, tasks: [...ws.tasks, task] } : ws) }));
   };
   const handleToggleSubtask = (taskId, subtaskId) => {
+    undoEpoch.current++;
     persist(d => ({
       ...d,
       workstreams: d.workstreams.map(ws => ({
@@ -206,6 +213,7 @@ export default function App() {
     }));
   };
   const handleAddSubtask = (taskId, title) => {
+    undoEpoch.current++;
     persist(d => ({
       ...d,
       workstreams: d.workstreams.map(ws => ({
@@ -220,6 +228,7 @@ export default function App() {
     }));
   };
   const handleDeleteSubtask = (taskId, subtaskId) => {
+    undoEpoch.current++;
     persist(d => ({
       ...d,
       workstreams: d.workstreams.map(ws => ({
@@ -231,12 +240,15 @@ export default function App() {
     }));
   };
   const handleAddNote = (note) => {
+    undoEpoch.current++;
     persist(d => ({ ...d, notes: [note, ...d.notes] }));
   };
   const handleDeleteNote = (idx) => {
+    undoEpoch.current++;
     persist(d => ({ ...d, notes: d.notes.filter((_, i) => i !== idx) }));
   };
   const handleReset = () => {
+    undoEpoch.current++;
     if (confirm("Reset all data to defaults? This cannot be undone.")) persist(() => DEFAULT_DATA);
   };
   const handleContextSave = async (text) => {
@@ -245,7 +257,13 @@ export default function App() {
     if (ts) syncTimestamps.current[CONTEXT_KEY] = ts;
   };
 
-  const handleAgentActions = useCallback((actions) => {
+  const handleAgentActions = useCallback((actions, messageIndex) => {
+    const snapshot = JSON.parse(JSON.stringify(dataRef.current));
+    undoBuffer.current = [
+      ...undoBuffer.current.slice(-4),
+      { snapshot, messageIndex, ts: Date.now(), epoch: undoEpoch.current }
+    ];
+
     persist(prev => {
       let d = JSON.parse(JSON.stringify(prev));
       for (const action of actions) {
@@ -324,6 +342,23 @@ export default function App() {
     });
   }, [persist]);
 
+  const handleUndo = useCallback((messageIndex) => {
+    const entry = undoBuffer.current.find(e => e.messageIndex === messageIndex);
+    if (!entry) return;
+    persist(() => entry.snapshot);
+    undoBuffer.current = undoBuffer.current.filter(e => e.messageIndex !== messageIndex);
+  }, [persist]);
+
+  const getUndoableMessages = useCallback(() => {
+    const now = Date.now();
+    const currentEpoch = undoEpoch.current;
+    return new Set(
+      undoBuffer.current
+        .filter(e => e.epoch === currentEpoch && now - e.ts < 30000)
+        .map(e => e.messageIndex)
+    );
+  }, []);
+
   const handleHistorySaved = useCallback((ts) => {
     if (ts) syncTimestamps.current[AGENT_HISTORY_KEY] = ts;
   }, []);
@@ -397,7 +432,7 @@ export default function App() {
         )}
       </div>
 
-      <AgentPanel onApplyActions={handleAgentActions} isOpen={agentOpen} onToggle={() => setAgentOpen(!agentOpen)} refreshKey={agentRefreshKey} onHistorySaved={handleHistorySaved} getFreshData={getFreshData} />
+      <AgentPanel onApplyActions={handleAgentActions} onUndo={handleUndo} getUndoableMessages={getUndoableMessages} isOpen={agentOpen} onToggle={() => setAgentOpen(!agentOpen)} refreshKey={agentRefreshKey} onHistorySaved={handleHistorySaved} getFreshData={getFreshData} />
 
       {syncToast && (
         <div style={{

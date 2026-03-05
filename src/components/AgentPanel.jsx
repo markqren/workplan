@@ -16,10 +16,11 @@ function actionLabels(actions) {
   }).filter(Boolean);
 }
 
-export default function AgentPanel({ onApplyActions, isOpen, onToggle, refreshKey, onHistorySaved, getFreshData }) {
+export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages, isOpen, onToggle, refreshKey, onHistorySaved, getFreshData }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [undoTick, setUndoTick] = useState(0);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -45,6 +46,12 @@ export default function AgentPanel({ onApplyActions, isOpen, onToggle, refreshKe
         messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
       }, 100);
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const interval = setInterval(() => setUndoTick(t => t + 1), 5000);
+    return () => clearInterval(interval);
   }, [isOpen]);
 
   const sendMessage = async () => {
@@ -75,7 +82,7 @@ export default function AgentPanel({ onApplyActions, isOpen, onToggle, refreshKe
       const { parsed, rawJson } = await callAgent(recentHistory, freshData, freshCtx);
 
       if (parsed.actions && parsed.actions.length > 0) {
-        onApplyActions(parsed.actions);
+        onApplyActions(parsed.actions, newMessages.length);
       }
 
       const assistantMsg = {
@@ -153,7 +160,7 @@ export default function AgentPanel({ onApplyActions, isOpen, onToggle, refreshKe
               {msg.content}
             </div>
             {msg.actions && msg.actions.length > 0 && (
-              <div style={{ maxWidth: "85%", marginTop: "4px", display: "flex", gap: "4px", flexWrap: "wrap" }}>
+              <div style={{ maxWidth: "85%", marginTop: "4px", display: "flex", gap: "4px", flexWrap: "wrap", alignItems: "center" }}>
                 {actionLabels(msg.actions).map((a, j) => (
                   <span key={j} style={{
                     fontSize: "9px", fontFamily: "'JetBrains Mono', monospace",
@@ -161,6 +168,14 @@ export default function AgentPanel({ onApplyActions, isOpen, onToggle, refreshKe
                     padding: "2px 8px", borderRadius: "3px",
                   }}>{a}</span>
                 ))}
+                {getUndoableMessages().has(i) && (
+                  <button onClick={() => onUndo(i)} style={{
+                    fontSize: "9px", fontFamily: "'JetBrains Mono', monospace",
+                    color: "#E85B5B", background: "#2A1A1A", border: "1px solid #4A2A2A",
+                    padding: "2px 8px", borderRadius: "3px", cursor: "pointer",
+                    marginLeft: "4px",
+                  }}>↩ undo</button>
+                )}
               </div>
             )}
           </div>

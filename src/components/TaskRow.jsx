@@ -44,6 +44,9 @@ export default function TaskRow({ task, onStatusChange, onEdit, onDelete, onTogg
   const [editTarget, setEditTarget] = useState(task.target);
   const [editSubtasks, setEditSubtasks] = useState(task.subtasks || []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [editDocuments, setEditDocuments] = useState(task.documents || []);
+  const [newDocLabel, setNewDocLabel] = useState("");
+  const [newDocUrl, setNewDocUrl] = useState("");
   const [hoveredSubtask, setHoveredSubtask] = useState(null);
 
   const subtasks = task.subtasks || [];
@@ -59,11 +62,14 @@ export default function TaskRow({ task, onStatusChange, onEdit, onDelete, onTogg
     setEditTarget(task.target);
     setEditSubtasks((task.subtasks || []).map(s => ({ ...s })));
     setNewSubtaskTitle("");
+    setEditDocuments((task.documents || []).map(d => ({ ...d })));
+    setNewDocLabel("");
+    setNewDocUrl("");
     setEditing(true);
   };
 
   const handleSave = () => {
-    onEdit(task.id, { title: editTitle, target: editTarget, subtasks: editSubtasks });
+    onEdit(task.id, { title: editTitle, target: editTarget, subtasks: editSubtasks, documents: editDocuments });
     setEditing(false);
   };
 
@@ -110,6 +116,45 @@ export default function TaskRow({ task, onStatusChange, onEdit, onDelete, onTogg
                 placeholder="＋ add sub-task"
                 style={{ flex: 1, background: "#0D0D0F", color: "#E5E5EA", border: "1px dashed #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }} />
               <button onClick={handleAddEditSubtask} style={{ background: "transparent", border: "1px solid #3A3A3E", color: "#6E6E73", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", cursor: "pointer" }}>+</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Documents section */}
+        <div style={{ marginTop: "12px" }}>
+          <span style={{ fontSize: "11px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.5px" }}>Documents</span>
+          <div style={{ marginTop: "6px" }}>
+            {editDocuments.map((doc, i) => (
+              <div key={doc.id || i} style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "4px" }}>
+                <input value={doc.label} onChange={e => setEditDocuments(prev => prev.map((d, j) => j === i ? { ...d, label: e.target.value } : d))}
+                  placeholder="Label"
+                  style={{ width: "140px", background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }} />
+                <input value={doc.url} onChange={e => setEditDocuments(prev => prev.map((d, j) => j === i ? { ...d, url: e.target.value } : d))}
+                  placeholder="URL"
+                  style={{ flex: 1, background: "#0D0D0F", color: "#5B8DEF", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }} />
+                <button onClick={() => setEditDocuments(prev => prev.filter((_, j) => j !== i))} style={{ background: "transparent", border: "none", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>×</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
+              <input value={newDocLabel} onChange={e => setNewDocLabel(e.target.value)}
+                placeholder="Label"
+                style={{ width: "140px", background: "#0D0D0F", color: "#E5E5EA", border: "1px dashed #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }} />
+              <input value={newDocUrl} onChange={e => setNewDocUrl(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && newDocLabel.trim() && newDocUrl.trim()) {
+                    const id = `doc-${Date.now()}`;
+                    setEditDocuments(prev => [...prev, { id, label: newDocLabel.trim(), url: newDocUrl.trim(), subtask_ids: [] }]);
+                    setNewDocLabel(""); setNewDocUrl("");
+                  }
+                }}
+                placeholder="＋ add document URL"
+                style={{ flex: 1, background: "#0D0D0F", color: "#E5E5EA", border: "1px dashed #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }} />
+              <button onClick={() => {
+                if (!newDocLabel.trim() || !newDocUrl.trim()) return;
+                const id = `doc-${Date.now()}`;
+                setEditDocuments(prev => [...prev, { id, label: newDocLabel.trim(), url: newDocUrl.trim(), subtask_ids: [] }]);
+                setNewDocLabel(""); setNewDocUrl("");
+              }} style={{ background: "transparent", border: "1px solid #3A3A3E", color: "#6E6E73", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", cursor: "pointer" }}>+</button>
             </div>
           </div>
         </div>
@@ -165,12 +210,35 @@ export default function TaskRow({ task, onStatusChange, onEdit, onDelete, onTogg
                   opacity: s.done ? 0.6 : 1,
                   flex: 1,
                 }}>{s.title}</span>
+                {(() => {
+                  const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
+                  return linkedDoc ? (
+                    <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
+                      style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7, flexShrink: 0 }}
+                      onClick={e => e.stopPropagation()}>📄</a>
+                  ) : null;
+                })()}
                 {hoveredSubtask === s.id && (
                   <button onClick={() => onDeleteSubtask(task.id, s.id)} style={{
                     background: "transparent", border: "none", color: "#4A2020", cursor: "pointer",
                     fontSize: "12px", padding: "0 2px", lineHeight: 1,
                   }}>×</button>
                 )}
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Related Documents */}
+        {task.documents && task.documents.length > 0 && (
+          <div style={{ marginTop: "6px", paddingLeft: "20px" }}>
+            <span style={{ fontSize: "9px", color: "#4A4A4E", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.5px" }}>📎 related docs</span>
+            {task.documents.map(doc => (
+              <div key={doc.id} style={{ padding: "2px 0" }}>
+                <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", color: "#5B8DEF", textDecoration: "none" }}
+                  onMouseEnter={e => e.target.style.textDecoration = "underline"}
+                  onMouseLeave={e => e.target.style.textDecoration = "none"}
+                >{doc.label} <span style={{ fontSize: "9px", opacity: 0.6 }}>↗</span></a>
               </div>
             ))}
           </div>

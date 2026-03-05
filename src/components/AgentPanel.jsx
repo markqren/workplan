@@ -9,6 +9,9 @@ function actionLabels(actions) {
     if (a.type === "update_task") return `↻ ${a.task_id}`;
     if (a.type === "delete_task") return `− ${a.task_id}`;
     if (a.type === "add_note") return "📝 note";
+    if (a.type === "add_document") return `📎 ${a.document?.label || "doc"}`;
+    if (a.type === "delete_document") return `📎− ${a.document_id}`;
+    if (a.type === "update_document") return `📎↻ ${a.document_id}`;
     return null;
   }).filter(Boolean);
 }

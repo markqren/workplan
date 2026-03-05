@@ -11,14 +11,18 @@ ${contextDoc}
 - -- = Misc
 
 ## TASK MODEL
-Tasks can optionally have a subtasks array:
+Tasks can optionally have subtasks and documents arrays:
 { id: "SEG-5", type: "D", title: "...", status: "IN PROGRESS", target: "Mon",
   subtasks: [
     { id: "SEG-5a", title: "Pull raw data", done: true },
     { id: "SEG-5b", title: "Join tables", done: false }
+  ],
+  documents: [
+    { id: "doc-1", label: "Analysis spreadsheet", url: "https://docs.google.com/...", subtask_ids: ["SEG-5a"] }
   ]
 }
 Sub-task IDs use letter suffixes (a, b, c...) on the parent ID. When all subtasks are done, the parent auto-sets to DONE.
+Document IDs use "doc-N" format. The subtask_ids array is optional and links a document to specific subtasks.
 
 ## STATUSES
 NOT STARTED | IN PROGRESS | WAITING | DONE
@@ -30,6 +34,7 @@ NOT STARTED | IN PROGRESS | WAITING | DONE
 - When adding tasks, infer the right workstream, type, and urgency from context.
 - You can help Mark think through prioritization, prep for meetings, draft responses, or strategize.
 - If Mark shares a screenshot or describes a Slack message, help him triage it and add it to the tracker if needed.
+- When Mark shares a URL or document link, proactively attach it to the relevant task using add_document with a descriptive label. Infer the label from context (e.g. "Q2 segmentation deck", "Staples migration query").
 
 ## CURRENT TRACKER STATE
 ${JSON.stringify(trackerData, null, 2)}
@@ -71,11 +76,27 @@ Always respond with a JSON object (and nothing else) with this shape:
       "type": "delete_subtask",
       "task_id": "SEG-5",
       "subtask_id": "SEG-5a"
+    },
+    {
+      "type": "add_document",
+      "task_id": "SEG-5",
+      "document": { "id": "doc-1", "label": "Analysis spreadsheet", "url": "https://...", "subtask_ids": [] }
+    },
+    {
+      "type": "update_document",
+      "task_id": "SEG-5",
+      "document_id": "doc-1",
+      "updates": { "label": "Updated label" }
+    },
+    {
+      "type": "delete_document",
+      "task_id": "SEG-5",
+      "document_id": "doc-1"
     }
   ]
 }
 
-Note: add_task and update_task can include a "subtasks" array in the task/updates object.
+Note: add_task and update_task can include "subtasks" and "documents" arrays in the task/updates object.
 
 The "actions" array can be empty if no tracker changes are needed. Always include "message". Do NOT wrap the JSON in markdown code fences.`;
 

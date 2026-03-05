@@ -295,6 +295,30 @@ export default function App() {
             );
           }
         }
+        if (action.type === "add_document" && action.task_id && action.document) {
+          for (const ws of d.workstreams) {
+            ws.tasks = ws.tasks.map(t => {
+              if (t.id !== action.task_id) return t;
+              return { ...t, documents: [...(t.documents || []), action.document] };
+            });
+          }
+        }
+        if (action.type === "delete_document" && action.task_id && action.document_id) {
+          for (const ws of d.workstreams) {
+            ws.tasks = ws.tasks.map(t => {
+              if (t.id !== action.task_id) return t;
+              return { ...t, documents: (t.documents || []).filter(doc => doc.id !== action.document_id) };
+            });
+          }
+        }
+        if (action.type === "update_document" && action.task_id && action.document_id && action.updates) {
+          for (const ws of d.workstreams) {
+            ws.tasks = ws.tasks.map(t => {
+              if (t.id !== action.task_id) return t;
+              return { ...t, documents: (t.documents || []).map(doc => doc.id === action.document_id ? { ...doc, ...action.updates } : doc) };
+            });
+          }
+        }
       }
       return d;
     });

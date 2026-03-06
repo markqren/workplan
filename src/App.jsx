@@ -29,6 +29,7 @@ export default function App() {
   const syncTimestamps = useRef({});
   const undoBuffer = useRef([]);
   const undoEpoch = useRef(0);
+  const mobile = useIsMobile();
 
   useEffect(() => { dataRef.current = data; }, [data]);
 
@@ -417,8 +418,6 @@ export default function App() {
   if (loading) {
     return <div style={{ minHeight: "100vh", background: "#0D0D0F", display: "flex", alignItems: "center", justifyContent: "center", color: "#6E6E73", fontFamily: "'Space Mono', monospace" }}>Loading...</div>;
   }
-
-  const mobile = useIsMobile();
 
   const filteredWorkstreams = data.workstreams.map(ws => ({
     ...ws,

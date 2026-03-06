@@ -173,6 +173,7 @@ export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelet
   return (
     <div style={{
       display: "flex", alignItems: mobile ? "stretch" : "flex-start", flexDirection: mobile ? "column" : "row",
+      flexWrap: mobile ? "nowrap" : "wrap",
       gap: mobile ? "8px" : "12px", padding: mobile ? "10px 12px" : "10px 14px",
       background: task.status === "DONE" ? "#111114" : "#1C1C1E",
       borderRadius: "8px", marginBottom: "6px", transition: "all 0.15s ease",
@@ -228,55 +229,58 @@ export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelet
           </div>
         </>
       )}
-      {/* Sub-tasks checklist — shared between mobile and desktop */}
-      {subtasks.length > 0 && (
-        <div style={{ paddingLeft: mobile ? "8px" : "20px", ...(mobile ? {} : { gridColumn: "1 / -1", marginTop: "-4px" }) }}>
-          {subtasks.map(s => (
-            <div key={s.id}
-              onMouseEnter={() => setHoveredSubtask(s.id)}
-              onMouseLeave={() => setHoveredSubtask(null)}
-              style={{
-                display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
-              }}>
-              <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
-              <span style={{
-                fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
-                color: s.done ? "#6E6E73" : "#C5C5CA",
-                textDecoration: s.done ? "line-through" : "none",
-                opacity: s.done ? 0.6 : 1,
-                flex: 1,
-              }}>{s.title}</span>
-              {(() => {
-                const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
-                return linkedDoc ? (
-                  <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
-                    style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7, flexShrink: 0 }}
-                    onClick={e => e.stopPropagation()}>📄</a>
-                ) : null;
-              })()}
-              {hoveredSubtask === s.id && (
-                <button onClick={() => onDeleteSubtask(task.id, s.id)} style={{
-                  background: "transparent", border: "none", color: "#4A2020", cursor: "pointer",
-                  fontSize: "12px", padding: "0 2px", lineHeight: 1,
-                }}>×</button>
-              )}
+      {/* Sub-tasks + Related Documents — full width below the main row */}
+      {(subtasks.length > 0 || (task.documents && task.documents.length > 0)) && (
+        <div style={{ width: "100%", paddingLeft: mobile ? "8px" : "20px" }}>
+          {subtasks.length > 0 && (
+            <div>
+              {subtasks.map(s => (
+                <div key={s.id}
+                  onMouseEnter={() => setHoveredSubtask(s.id)}
+                  onMouseLeave={() => setHoveredSubtask(null)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
+                  }}>
+                  <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
+                  <span style={{
+                    fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
+                    color: s.done ? "#6E6E73" : "#C5C5CA",
+                    textDecoration: s.done ? "line-through" : "none",
+                    opacity: s.done ? 0.6 : 1,
+                    flex: 1,
+                  }}>{s.title}</span>
+                  {(() => {
+                    const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
+                    return linkedDoc ? (
+                      <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
+                        style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7, flexShrink: 0 }}
+                        onClick={e => e.stopPropagation()}>📄</a>
+                    ) : null;
+                  })()}
+                  {hoveredSubtask === s.id && (
+                    <button onClick={() => onDeleteSubtask(task.id, s.id)} style={{
+                      background: "transparent", border: "none", color: "#4A2020", cursor: "pointer",
+                      fontSize: "12px", padding: "0 2px", lineHeight: 1,
+                    }}>×</button>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-      {/* Related Documents */}
-      {task.documents && task.documents.length > 0 && (
-        <div style={{ paddingLeft: mobile ? "8px" : "20px" }}>
-          <span style={{ fontSize: "9px", color: "#4A4A4E", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.5px" }}>📎 related docs</span>
-          {task.documents.map(doc => (
-            <div key={doc.id} style={{ padding: "2px 0" }}>
-              <a href={doc.url} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", color: "#5B8DEF", textDecoration: "none" }}
-                onMouseEnter={e => e.target.style.textDecoration = "underline"}
-                onMouseLeave={e => e.target.style.textDecoration = "none"}
-              >{doc.label} <span style={{ fontSize: "9px", opacity: 0.6 }}>↗</span></a>
+          )}
+          {task.documents && task.documents.length > 0 && (
+            <div style={{ marginTop: subtasks.length > 0 ? "6px" : 0 }}>
+              <span style={{ fontSize: "9px", color: "#4A4A4E", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.5px" }}>📎 related docs</span>
+              {task.documents.map(doc => (
+                <div key={doc.id} style={{ padding: "2px 0" }}>
+                  <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", color: "#5B8DEF", textDecoration: "none" }}
+                    onMouseEnter={e => e.target.style.textDecoration = "underline"}
+                    onMouseLeave={e => e.target.style.textDecoration = "none"}
+                  >{doc.label} <span style={{ fontSize: "9px", opacity: 0.6 }}>↗</span></a>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

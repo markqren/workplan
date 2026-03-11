@@ -1,7 +1,7 @@
 import { signOut } from '../lib/auth.js';
 import { useIsMobile } from '../hooks/useMediaQuery.js';
 
-export default function Header({ data, view, setView, filter, setFilter, onReset }) {
+export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onReset }) {
   const mobile = useIsMobile();
 
   return (
@@ -17,6 +17,7 @@ export default function Header({ data, view, setView, filter, setFilter, onReset
           </>
         )}
         <div style={{ flex: 1 }} />
+        <button onClick={onNewWeek} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>new week</button>
         <button onClick={onReset} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>reset</button>
         <button onClick={() => signOut()} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>sign out</button>
       </div>

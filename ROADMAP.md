@@ -1,6 +1,6 @@
 # ⬡ WORKPLAN — Roadmap & Feature Tracker
 
-**Last updated:** Mar 5, 2026 | Stack: Vite + React + Supabase + Netlify Functions
+**Last updated:** Mar 11, 2026 | Stack: Vite + React + Supabase + Netlify Functions
 
 ---
 
@@ -31,7 +31,7 @@
 ---
 
 <details>
-<summary><strong>Completed</strong> (16 items)</summary>
+<summary><strong>Completed</strong> (17 items)</summary>
 
 | ID | Item | Type | Completed |
 |----|------|------|-----------|
@@ -51,6 +51,7 @@
 | FEA-02 | **Tasks View Polish** — Workstream headers: larger 14px color dot (rounded square), task count badge, hover highlight. TaskRow: 6px gap, workstream-color left border via `wsColor` prop. QuickNotes: relative time (`timeAgo`), empty state message. Section divider before Quick Notes. Content max-width increased to 960px. Empty filter state messages on workstreams. | Feature | Mar 5 |
 | FEA-03 | **Week View Polish** — Day cards now editable: click focus label or activities to inline-edit (save on blur/Enter). Add/remove day buttons. Separator line between focus and activities. "This Week's Progress" summary bar with done/active/waiting counts and progress bar. Handlers wired in App.jsx via `onUpdateDay`, `onAddDay`, `onRemoveDay`. | Feature | Mar 5 |
 | FEA-04 | **Context View Polish** — Edit/Preview tab toggle with simple markdown renderer (headers, bold, code, lists). Word count alongside char count. TOC sidebar parsed from `##` headers with click-to-scroll. Auto-save with 1.5s debounce replacing manual save button. Save status indicator (Unsaved → Saving... → Saved). | Feature | Mar 5 |
+| FEA-21 | **Auto-Collapse Old Completed Subtasks** — Subtasks completed >7 days ago are auto-collapsed behind a "▸ N older completed" toggle in TaskRow. Added `completedAt` timestamp to subtask model (set on toggle done, cleared on toggle back). Legacy subtasks without `completedAt` remain visible. Edit mode still shows all subtasks. Agent system prompt updated with new field. | Feature | Mar 11 |
 
 </details>
 

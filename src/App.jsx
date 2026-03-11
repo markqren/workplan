@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { DEFAULT_DATA, STORAGE_KEY, CONTEXT_KEY, AGENT_HISTORY_KEY } from "./lib/constants.js";
-import { loadData, saveData, loadContext, saveContext, getTimestamp } from "./lib/storage.js";
+import { loadData, saveData, loadContext, saveContext, getTimestamp, loadArchiveIndex, saveArchiveIndex, saveArchive } from "./lib/storage.js";
 import { onAuthStateChange } from "./lib/auth.js";
 import DEFAULT_CONTEXT from "./context/default-context.md?raw";
 import { useIsMobile } from "./hooks/useMediaQuery.js";
@@ -280,6 +280,52 @@ export default function App() {
     if (ts) syncTimestamps.current[CONTEXT_KEY] = ts;
   };
 
+  const handleNewWeek = async () => {
+    if (!confirm("Start a new week? Current data will be archived. Completed tasks will be removed and in-progress tasks reset to NOT STARTED.")) return;
+
+    const current = dataRef.current;
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    const archiveKey = `work-tracker-archive-${dateStr}`;
+
+    // Archive current data
+    const archive = JSON.parse(JSON.stringify(current));
+    archive.archivedAt = now.toISOString();
+    await saveArchive(archiveKey, archive);
+
+    // Update archive index
+    const index = await loadArchiveIndex();
+    if (!index.find(e => e.key === archiveKey)) {
+      index.push({ key: archiveKey, weekLabel: current.weekLabel, archivedAt: now.toISOString() });
+      await saveArchiveIndex(index);
+    }
+
+    // Generate new week label: "Week of {Mon} {Day}-{Fri Day}"
+    const monday = new Date(now);
+    const dayOfWeek = monday.getDay();
+    const diff = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 0 : -(dayOfWeek - 1);
+    monday.setDate(monday.getDate() + diff);
+    const friday = new Date(monday);
+    friday.setDate(friday.getDate() + 4);
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const weekLabel = `Week of ${monthNames[monday.getMonth()]} ${monday.getDate()}-${friday.getDate()}`;
+
+    // Build new week data
+    undoEpoch.current++;
+    persist(d => ({
+      ...d,
+      weekLabel,
+      workstreams: d.workstreams.map(ws => ({
+        ...ws,
+        tasks: ws.tasks
+          .filter(t => t.status !== "DONE")
+          .map(t => t.status === "IN PROGRESS" ? { ...t, status: "NOT STARTED" } : t),
+      })),
+      weekShape: d.weekShape.map(day => ({ ...day, focus: "TBD", activities: "" })),
+      notes: [],
+    }));
+  };
+
   const handleAgentActions = useCallback((actions, messageIndex) => {
     const snapshot = JSON.parse(JSON.stringify(dataRef.current));
     undoBuffer.current = [
@@ -429,7 +475,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0D0D0F", color: "#E5E5EA", fontFamily: "'DM Sans', sans-serif" }}>
-      <Header data={data} view={view} setView={setView} filter={filter} setFilter={setFilter} onReset={handleReset} />
+      <Header data={data} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onReset={handleReset} />
 
       <div style={{ padding: mobile ? "16px" : "24px 32px", maxWidth: "960px" }}>
         {view === "tasks" && (

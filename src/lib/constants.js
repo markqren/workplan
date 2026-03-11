@@ -1,6 +1,7 @@
 export const STORAGE_KEY = "work-tracker-v1";
 export const AGENT_HISTORY_KEY = "work-tracker-agent-history";
 export const CONTEXT_KEY = "work-tracker-context";
+export const ARCHIVE_INDEX_KEY = "work-tracker-archive-index";
 
 export const STATUS_CONFIG = {
   "NOT STARTED": { bg: "#2A2A2E", fg: "#8E8E93", border: "#3A3A3E" },

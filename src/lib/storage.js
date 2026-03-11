@@ -1,4 +1,4 @@
-import { STORAGE_KEY, AGENT_HISTORY_KEY, CONTEXT_KEY } from './constants.js';
+import { STORAGE_KEY, AGENT_HISTORY_KEY, CONTEXT_KEY, ARCHIVE_INDEX_KEY } from './constants.js';
 import { supabase } from './supabase.js';
 
 // ── Raw storage abstraction (Supabase kv_store) ───────────────────
@@ -95,6 +95,46 @@ export async function saveContext(text) {
     return r.updatedAt;
   } catch (e) {
     console.error("Context save failed:", e);
+    return null;
+  }
+}
+
+// ── Archive helpers ───────────────────────────────────────────────
+
+export async function loadArchiveIndex() {
+  try {
+    const r = await get(ARCHIVE_INDEX_KEY);
+    return r ? JSON.parse(r.value) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveArchiveIndex(index) {
+  try {
+    const r = await set(ARCHIVE_INDEX_KEY, JSON.stringify(index));
+    return r.updatedAt;
+  } catch (e) {
+    console.error("Archive index save failed:", e);
+    return null;
+  }
+}
+
+export async function saveArchive(key, data) {
+  try {
+    const r = await set(key, JSON.stringify(data));
+    return r.updatedAt;
+  } catch (e) {
+    console.error("Archive save failed:", e);
+    return null;
+  }
+}
+
+export async function loadArchive(key) {
+  try {
+    const r = await get(key);
+    return r ? JSON.parse(r.value) : null;
+  } catch {
     return null;
   }
 }

@@ -1,7 +1,7 @@
 import { signOut } from '../lib/auth.js';
 import { useIsMobile } from '../hooks/useMediaQuery.js';
 
-export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onReset, viewingArchive, archiveIndex, onNavigateWeek, onJumpToWeek }) {
+export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onExport, onReset, viewingArchive, archiveIndex, onNavigateWeek, onJumpToWeek }) {
   const mobile = useIsMobile();
 
   const canGoOlder = archiveIndex.length > 0 && (!viewingArchive || archiveIndex.findIndex(e => e.key === viewingArchive) > 0);
@@ -33,6 +33,7 @@ export default function Header({ data, view, setView, filter, setFilter, onNewWe
           </>
         )}
         <div style={{ flex: 1 }} />
+        <button onClick={onExport} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>export</button>
         {!viewingArchive && (
           <>
             <button onClick={onNewWeek} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>new week</button>

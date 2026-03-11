@@ -12,6 +12,7 @@ import QuickNotes from "./components/QuickNotes.jsx";
 import ContextEditor from "./components/ContextEditor.jsx";
 import AgentPanel from "./components/AgentPanel.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
+import { generateWeeklySummary } from "./lib/export.js";
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -24,6 +25,7 @@ export default function App() {
   const [contextDoc, setContextDoc] = useState(DEFAULT_CONTEXT);
   const [syncToast, setSyncToast] = useState(false);
   const [agentRefreshKey, setAgentRefreshKey] = useState(0);
+  const [exportToast, setExportToast] = useState(false);
   const [viewingArchive, setViewingArchive] = useState(null);
   const [archiveIndex, setArchiveIndex] = useState([]);
   const [archiveData, setArchiveData] = useState(null);
@@ -184,6 +186,13 @@ export default function App() {
     return () => clearTimeout(t);
   }, [syncToast]);
 
+  // Auto-hide export toast after 2s
+  useEffect(() => {
+    if (!exportToast) return;
+    const t = setTimeout(() => setExportToast(false), 2000);
+    return () => clearTimeout(t);
+  }, [exportToast]);
+
   // ── Handlers ────────────────────────────────────────────────────
 
   const handleStatusChange = (taskId, newStatus) => {
@@ -330,6 +339,24 @@ export default function App() {
       weekShape: d.weekShape.map(day => ({ ...day, focus: "TBD", activities: "" })),
       notes: [],
     }));
+  };
+
+  const handleExport = () => {
+    const target = viewingArchive && archiveData ? archiveData : dataRef.current;
+    const md = generateWeeklySummary(target);
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(md).then(() => setExportToast(true)).catch(() => {});
+
+    // Download as .md file
+    const slug = (target.weekLabel || "export").replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `workplan-${slug}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleNavigateWeek = useCallback(async (direction) => {
@@ -517,7 +544,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0D0D0F", color: "#E5E5EA", fontFamily: "'DM Sans', sans-serif" }}>
-      <Header data={effectiveData} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onReset={handleReset} viewingArchive={viewingArchive} archiveIndex={archiveIndex} onNavigateWeek={handleNavigateWeek} onJumpToWeek={handleJumpToWeek} />
+      <Header data={effectiveData} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onExport={handleExport} onReset={handleReset} viewingArchive={viewingArchive} archiveIndex={archiveIndex} onNavigateWeek={handleNavigateWeek} onJumpToWeek={handleJumpToWeek} />
 
       <div style={{ padding: mobile ? "16px" : "24px 32px", maxWidth: "960px" }}>
         {view === "tasks" && (
@@ -562,6 +589,17 @@ export default function App() {
           boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
         }}>
           Synced latest changes
+        </div>
+      )}
+      {exportToast && (
+        <div style={{
+          position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)",
+          background: "#1C1C1E", border: "1px solid #2A2A4A", borderRadius: "8px",
+          padding: "8px 16px", color: "#5B8DEF", fontSize: "11px",
+          fontFamily: "'JetBrains Mono', monospace", zIndex: 200,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+        }}>
+          Summary copied to clipboard
         </div>
       )}
     </div>

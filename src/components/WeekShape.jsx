@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 
-export default function WeekShape({ weekShape, workstreams, onUpdateDay, onAddDay, onRemoveDay }) {
+export default function WeekShape({ weekShape, workstreams, readOnly, onUpdateDay, onAddDay, onRemoveDay }) {
   const mobile = useIsMobile();
   const [editingIndex, setEditingIndex] = useState(null);
   const [editField, setEditField] = useState(null); // 'focus' | 'activities'
@@ -62,7 +62,7 @@ export default function WeekShape({ weekShape, workstreams, onUpdateDay, onAddDa
           const focusColor = day.focus === "DONE" ? "#5B8DEF" : day.focus === "PREP" ? "#E8A838" : day.focus === "EXECUTE" ? "#6CC4A1" : day.focus.includes("MEETING") ? "#E85B5B" : "#8E8E93";
           return (
             <div key={i} style={{ flex: mobile ? "none" : "1 1 180px", background: "#1C1C1E", borderRadius: "8px", padding: "10px 12px", borderTop: `2px solid ${focusColor}`, position: "relative" }}>
-              {onRemoveDay && (
+              {onRemoveDay && !readOnly && (
                 <button onClick={() => onRemoveDay(i)} style={{
                   position: "absolute", top: "4px", right: "6px", background: "transparent",
                   border: "none", color: "#3A3A3E", cursor: "pointer", fontSize: "12px",
@@ -71,31 +71,31 @@ export default function WeekShape({ weekShape, workstreams, onUpdateDay, onAddDa
               )}
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", paddingRight: "16px" }}>
                 <span style={{ fontFamily: "'Space Mono', monospace", fontSize: "11px", color: "#E5E5EA", fontWeight: 600 }}>{day.day}</span>
-                {editingIndex === i && editField === "focus" ? (
+                {!readOnly && editingIndex === i && editField === "focus" ? (
                   <input value={editValue} onChange={e => setEditValue(e.target.value)}
                     onBlur={commitEdit} onKeyDown={e => e.key === "Enter" && commitEdit()}
                     autoFocus
                     style={{ fontSize: "9px", color: focusColor, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, letterSpacing: "0.5px", background: "#0D0D0F", border: "1px solid #3A3A3E", borderRadius: "3px", padding: "1px 4px", width: "80px", textAlign: "right", outline: "none" }} />
                 ) : (
-                  <span onClick={() => startEdit(i, "focus", day.focus)} style={{ fontSize: "9px", color: focusColor, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, letterSpacing: "0.5px", cursor: "pointer" }}>{day.focus}</span>
+                  <span onClick={() => !readOnly && startEdit(i, "focus", day.focus)} style={{ fontSize: "9px", color: focusColor, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, letterSpacing: "0.5px", cursor: readOnly ? "default" : "pointer" }}>{day.focus}</span>
                 )}
               </div>
               <div style={{ height: "1px", background: "#2A2A2E", margin: "4px 0 6px" }} />
-              {editingIndex === i && editField === "activities" ? (
+              {!readOnly && editingIndex === i && editField === "activities" ? (
                 <textarea value={editValue} onChange={e => setEditValue(e.target.value)}
                   onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEdit(); } }}
                   autoFocus
                   style={{ width: "100%", fontSize: "11px", color: "#8E8E93", lineHeight: 1.4, fontFamily: "'DM Sans', sans-serif", background: "#0D0D0F", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 6px", resize: "vertical", minHeight: "40px", boxSizing: "border-box", outline: "none" }} />
               ) : (
-                <div onClick={() => startEdit(i, "activities", day.activities)} style={{ fontSize: "11px", color: "#8E8E93", lineHeight: 1.4, fontFamily: "'DM Sans', sans-serif", cursor: "pointer", minHeight: "20px" }}>
-                  {day.activities || <span style={{ color: "#3A3A3E", fontStyle: "italic" }}>click to add activities</span>}
+                <div onClick={() => !readOnly && startEdit(i, "activities", day.activities)} style={{ fontSize: "11px", color: "#8E8E93", lineHeight: 1.4, fontFamily: "'DM Sans', sans-serif", cursor: readOnly ? "default" : "pointer", minHeight: "20px" }}>
+                  {day.activities || (readOnly ? <span style={{ color: "#3A3A3E", fontStyle: "italic" }}>—</span> : <span style={{ color: "#3A3A3E", fontStyle: "italic" }}>click to add activities</span>)}
                 </div>
               )}
             </div>
           );
         })}
       </div>
-      {onAddDay && (
+      {onAddDay && !readOnly && (
         <button onClick={onAddDay} style={{
           background: "transparent", border: "1px dashed #2A2A2E", borderRadius: "8px",
           padding: mobile ? "12px 14px" : "8px 14px", color: "#4A4A4E", fontSize: "12px", cursor: "pointer",

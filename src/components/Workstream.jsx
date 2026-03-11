@@ -2,7 +2,7 @@ import { useState } from "react";
 import TaskRow from "./TaskRow.jsx";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 
-export default function Workstream({ ws, onStatusChange, onEdit, onDelete, onAddTask, onToggleSubtask, onAddSubtask, onDeleteSubtask, emptyFilterMessage }) {
+export default function Workstream({ ws, readOnly, onStatusChange, onEdit, onDelete, onAddTask, onToggleSubtask, onAddSubtask, onDeleteSubtask, emptyFilterMessage }) {
   const mobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -61,9 +61,9 @@ export default function Workstream({ ws, onStatusChange, onEdit, onDelete, onAdd
             </div>
           )}
           {ws.tasks.map(task => (
-            <TaskRow key={task.id} task={task} wsColor={ws.color} onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onToggleSubtask={onToggleSubtask} onAddSubtask={onAddSubtask} onDeleteSubtask={onDeleteSubtask} />
+            <TaskRow key={task.id} task={task} wsColor={ws.color} readOnly={readOnly} onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onToggleSubtask={onToggleSubtask} onAddSubtask={onAddSubtask} onDeleteSubtask={onDeleteSubtask} />
           ))}
-          {adding ? (
+          {!readOnly && adding ? (
             <div style={{ padding: "12px 16px", background: "#1C1C1E", borderRadius: "8px", border: "1px dashed #3A3A3E", marginTop: "4px" }}>
               <textarea value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Task description..."
                 style={{ width: "100%", background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #3A3A3E", borderRadius: "6px", padding: "8px", fontSize: "13px", fontFamily: "'DM Sans', sans-serif", resize: "vertical", minHeight: "48px", boxSizing: "border-box" }} />
@@ -78,14 +78,14 @@ export default function Workstream({ ws, onStatusChange, onEdit, onDelete, onAdd
                 <button onClick={() => setAdding(false)} style={{ background: "transparent", color: "#6E6E73", border: "1px solid #3A3A3E", borderRadius: "4px", padding: mobile ? "8px 16px" : "4px 12px", fontSize: "11px", cursor: "pointer", minHeight: mobile ? "44px" : "auto" }}>Cancel</button>
               </div>
             </div>
-          ) : (
+          ) : !readOnly ? (
             <button onClick={() => setAdding(true)} style={{
               background: "transparent", border: "1px dashed #2A2A2E", borderRadius: "8px",
               padding: mobile ? "12px 14px" : "8px 14px", color: "#4A4A4E", fontSize: "12px", cursor: "pointer",
               width: "100%", textAlign: "left", fontFamily: "'DM Sans', sans-serif", marginTop: "4px",
               minHeight: mobile ? "44px" : "auto",
             }}>+ Add task</button>
-          )}
+          ) : null}
         </div>
       )}
     </div>

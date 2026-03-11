@@ -39,7 +39,7 @@ function SubtaskCheckbox({ checked, onChange }) {
   );
 }
 
-export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelete, onToggleSubtask, onAddSubtask, onDeleteSubtask }) {
+export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdit, onDelete, onToggleSubtask, onAddSubtask, onDeleteSubtask }) {
   const mobile = useIsMobile();
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
@@ -61,6 +61,7 @@ export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelet
   const collapsedSubtasks = subtasks.filter(s => isOldCompleted(s));
 
   const cycleStatus = () => {
+    if (readOnly) return;
     const idx = STATUSES.indexOf(task.status);
     onStatusChange(task.id, STATUSES[(idx + 1) % STATUSES.length]);
   };
@@ -204,10 +205,12 @@ export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelet
             {task.title}
           </div>
           {/* Actions row */}
-          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-            <button onClick={startEditing} title="Edit" style={{ background: "transparent", border: "1px solid #2A2A2E", color: "#6E6E73", cursor: "pointer", fontSize: "14px", padding: "8px 12px", borderRadius: "4px", minHeight: "44px" }}>✎</button>
-            <button onClick={() => onDelete(task.id)} title="Delete" style={{ background: "transparent", border: "1px solid #2A2A2E", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "8px 12px", borderRadius: "4px", minHeight: "44px" }}>×</button>
-          </div>
+          {!readOnly && (
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button onClick={startEditing} title="Edit" style={{ background: "transparent", border: "1px solid #2A2A2E", color: "#6E6E73", cursor: "pointer", fontSize: "14px", padding: "8px 12px", borderRadius: "4px", minHeight: "44px" }}>✎</button>
+              <button onClick={() => onDelete(task.id)} title="Delete" style={{ background: "transparent", border: "1px solid #2A2A2E", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "8px 12px", borderRadius: "4px", minHeight: "44px" }}>×</button>
+            </div>
+          )}
         </>
       ) : (
         <>
@@ -230,8 +233,12 @@ export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelet
           </div>
           <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
             <StatusBadge status={task.status} onClick={cycleStatus} mobile={false} />
-            <button onClick={startEditing} title="Edit" style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>✎</button>
-            <button onClick={() => onDelete(task.id)} title="Delete" style={{ background: "transparent", border: "none", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>×</button>
+            {!readOnly && (
+              <>
+                <button onClick={startEditing} title="Edit" style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>✎</button>
+                <button onClick={() => onDelete(task.id)} title="Delete" style={{ background: "transparent", border: "none", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}>×</button>
+              </>
+            )}
           </div>
         </>
       )}

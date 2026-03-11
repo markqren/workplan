@@ -1,8 +1,18 @@
 import { signOut } from '../lib/auth.js';
 import { useIsMobile } from '../hooks/useMediaQuery.js';
 
-export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onReset }) {
+export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onReset, viewingArchive, archiveIndex, onNavigateWeek, onJumpToWeek }) {
   const mobile = useIsMobile();
+
+  const canGoOlder = archiveIndex.length > 0 && (!viewingArchive || archiveIndex.findIndex(e => e.key === viewingArchive) > 0);
+  const canGoNewer = !!viewingArchive;
+
+  const arrowStyle = (enabled) => ({
+    background: "transparent", border: "none",
+    color: enabled ? "#6E6E73" : "#2A2A2E",
+    fontSize: "14px", cursor: enabled ? "pointer" : "default",
+    fontFamily: "'JetBrains Mono', monospace", padding: "0 2px",
+  });
 
   return (
     <div style={{ padding: mobile ? "16px 16px 12px" : "24px 32px 16px", borderBottom: "1px solid #1C1C1E", position: "sticky", top: 0, background: "#0D0D0F", zIndex: 10 }}>
@@ -10,25 +20,41 @@ export default function Header({ data, view, setView, filter, setFilter, onNewWe
         <h1 style={{ fontFamily: "'Space Mono', monospace", fontSize: mobile ? "16px" : "20px", fontWeight: 700, margin: 0, letterSpacing: "-0.5px" }}>⬡ WORKPLAN</h1>
         {!mobile && (
           <>
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", color: "#6E6E73" }}>{data.weekLabel}</span>
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#3A3A3E" }}>
-              saved {new Date(data.lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </span>
+            <button onClick={() => canGoOlder && onNavigateWeek(-1)} style={arrowStyle(canGoOlder)}>←</button>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", color: viewingArchive ? "#E8A838" : "#6E6E73" }}>{data.weekLabel}</span>
+            <button onClick={() => canGoNewer && onNavigateWeek(1)} style={arrowStyle(canGoNewer)}>→</button>
+            {viewingArchive ? (
+              <button onClick={() => onJumpToWeek(null)} style={{ background: "transparent", border: "none", color: "#5B8DEF", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>back to current</button>
+            ) : (
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#3A3A3E" }}>
+                saved {new Date(data.lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
           </>
         )}
         <div style={{ flex: 1 }} />
-        <button onClick={onNewWeek} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>new week</button>
-        <button onClick={onReset} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>reset</button>
+        {!viewingArchive && (
+          <>
+            <button onClick={onNewWeek} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>new week</button>
+            <button onClick={onReset} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>reset</button>
+          </>
+        )}
         <button onClick={() => signOut()} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>sign out</button>
       </div>
       {mobile && (
-        <div style={{ display: "flex", gap: "8px", marginBottom: "8px", fontSize: "10px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace" }}>
-          <span>{data.weekLabel}</span>
-          <span style={{ color: "#3A3A3E" }}>saved {new Date(data.lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+        <div style={{ display: "flex", gap: "8px", marginBottom: "8px", fontSize: "10px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace", alignItems: "center" }}>
+          <button onClick={() => canGoOlder && onNavigateWeek(-1)} style={arrowStyle(canGoOlder)}>←</button>
+          <span style={{ color: viewingArchive ? "#E8A838" : "#6E6E73" }}>{data.weekLabel}</span>
+          <button onClick={() => canGoNewer && onNavigateWeek(1)} style={arrowStyle(canGoNewer)}>→</button>
+          {viewingArchive ? (
+            <button onClick={() => onJumpToWeek(null)} style={{ background: "transparent", border: "none", color: "#5B8DEF", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace", padding: 0 }}>current</button>
+          ) : (
+            <span style={{ color: "#3A3A3E" }}>saved {new Date(data.lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          )}
         </div>
       )}
       <div style={{ display: "flex", gap: "8px", overflowX: mobile ? "auto" : "visible", WebkitOverflowScrolling: "touch" }}>
-        {[{ id: "tasks", label: "Tasks" }, { id: "week", label: "Week" }, { id: "context", label: "Context" }].map(v => (
+        {[{ id: "tasks", label: "Tasks" }, { id: "week", label: "Week" }, ...(!viewingArchive ? [{ id: "context", label: "Context" }] : [])].map(v => (
           <button key={v.id} onClick={() => setView(v.id)} style={{
             background: view === v.id ? "#2A2A2E" : "transparent", color: view === v.id ? "#E5E5EA" : "#6E6E73",
             border: "1px solid", borderColor: view === v.id ? "#3A3A3E" : "transparent",

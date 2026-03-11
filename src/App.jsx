@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { DEFAULT_DATA, STORAGE_KEY, CONTEXT_KEY, AGENT_HISTORY_KEY } from "./lib/constants.js";
-import { loadData, saveData, loadContext, saveContext, getTimestamp, loadArchiveIndex, saveArchiveIndex, saveArchive } from "./lib/storage.js";
+import { loadData, saveData, loadContext, saveContext, getTimestamp, loadArchiveIndex, saveArchiveIndex, saveArchive, loadArchive } from "./lib/storage.js";
 import { onAuthStateChange } from "./lib/auth.js";
 import DEFAULT_CONTEXT from "./context/default-context.md?raw";
 import { useIsMobile } from "./hooks/useMediaQuery.js";
@@ -24,6 +24,9 @@ export default function App() {
   const [contextDoc, setContextDoc] = useState(DEFAULT_CONTEXT);
   const [syncToast, setSyncToast] = useState(false);
   const [agentRefreshKey, setAgentRefreshKey] = useState(0);
+  const [viewingArchive, setViewingArchive] = useState(null);
+  const [archiveIndex, setArchiveIndex] = useState([]);
+  const [archiveData, setArchiveData] = useState(null);
 
   const dataRef = useRef(null);
   const syncTimestamps = useRef({});
@@ -58,11 +61,13 @@ export default function App() {
       getTimestamp(STORAGE_KEY),
       getTimestamp(CONTEXT_KEY),
       getTimestamp(AGENT_HISTORY_KEY),
-    ]).then(([saved, ctx, dataTs, ctxTs, histTs]) => {
+      loadArchiveIndex(),
+    ]).then(([saved, ctx, dataTs, ctxTs, histTs, idx]) => {
       const d = saved || DEFAULT_DATA;
       setData(d);
       dataRef.current = d;
       setContextDoc(ctx || DEFAULT_CONTEXT);
+      setArchiveIndex(idx || []);
       syncTimestamps.current = {
         [STORAGE_KEY]: dataTs,
         [CONTEXT_KEY]: ctxTs,
@@ -299,6 +304,7 @@ export default function App() {
       index.push({ key: archiveKey, weekLabel: current.weekLabel, archivedAt: now.toISOString() });
       await saveArchiveIndex(index);
     }
+    setArchiveIndex(index);
 
     // Generate new week label: "Week of {Mon} {Day}-{Fri Day}"
     const monday = new Date(now);
@@ -325,6 +331,39 @@ export default function App() {
       notes: [],
     }));
   };
+
+  const handleNavigateWeek = useCallback(async (direction) => {
+    if (archiveIndex.length === 0) return;
+    if (!viewingArchive) {
+      // Currently on current week, go to newest archive
+      if (direction === -1) {
+        const entry = archiveIndex[archiveIndex.length - 1];
+        const archived = await loadArchive(entry.key);
+        if (archived) { setArchiveData(archived); setViewingArchive(entry.key); }
+      }
+      return;
+    }
+    const currentIdx = archiveIndex.findIndex(e => e.key === viewingArchive);
+    const nextIdx = currentIdx + direction;
+    if (nextIdx < 0) return; // at oldest, can't go further back
+    if (nextIdx >= archiveIndex.length) {
+      // Go back to current week
+      setViewingArchive(null); setArchiveData(null);
+      return;
+    }
+    const entry = archiveIndex[nextIdx];
+    const archived = await loadArchive(entry.key);
+    if (archived) { setArchiveData(archived); setViewingArchive(entry.key); }
+  }, [viewingArchive, archiveIndex]);
+
+  const handleJumpToWeek = useCallback(async (archiveKey) => {
+    if (!archiveKey) {
+      setViewingArchive(null); setArchiveData(null);
+      return;
+    }
+    const archived = await loadArchive(archiveKey);
+    if (archived) { setArchiveData(archived); setViewingArchive(archiveKey); }
+  }, []);
 
   const handleAgentActions = useCallback((actions, messageIndex) => {
     const snapshot = JSON.parse(JSON.stringify(dataRef.current));
@@ -465,42 +504,45 @@ export default function App() {
     return <div style={{ minHeight: "100vh", background: "#0D0D0F", display: "flex", alignItems: "center", justifyContent: "center", color: "#6E6E73", fontFamily: "'Space Mono', monospace" }}>Loading...</div>;
   }
 
-  const filteredWorkstreams = data.workstreams.map(ws => ({
+  const readOnly = !!viewingArchive;
+  const effectiveData = viewingArchive && archiveData ? archiveData : data;
+
+  const filteredWorkstreams = effectiveData.workstreams.map(ws => ({
     ...ws,
     tasks: filter === "all" ? ws.tasks : filter === "active" ? ws.tasks.filter(t => t.status !== "DONE") : ws.tasks.filter(t => t.status === "DONE"),
   }));
   const visibleWorkstreams = filteredWorkstreams.filter(ws => ws.tasks.length > 0);
   // For empty filter states: workstreams that have tasks in the unfiltered data but none after filtering
-  const emptyFilteredWorkstreams = filter !== "all" ? filteredWorkstreams.filter(ws => ws.tasks.length === 0 && data.workstreams.find(w => w.id === ws.id)?.tasks.length > 0) : [];
+  const emptyFilteredWorkstreams = filter !== "all" ? filteredWorkstreams.filter(ws => ws.tasks.length === 0 && effectiveData.workstreams.find(w => w.id === ws.id)?.tasks.length > 0) : [];
 
   return (
     <div style={{ minHeight: "100vh", background: "#0D0D0F", color: "#E5E5EA", fontFamily: "'DM Sans', sans-serif" }}>
-      <Header data={data} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onReset={handleReset} />
+      <Header data={effectiveData} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onReset={handleReset} viewingArchive={viewingArchive} archiveIndex={archiveIndex} onNavigateWeek={handleNavigateWeek} onJumpToWeek={handleJumpToWeek} />
 
       <div style={{ padding: mobile ? "16px" : "24px 32px", maxWidth: "960px" }}>
         {view === "tasks" && (
           <>
-            <StatsBar workstreams={data.workstreams} />
+            <StatsBar workstreams={effectiveData.workstreams} />
             {visibleWorkstreams.map(ws => (
-              <Workstream key={ws.id} ws={ws} onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
+              <Workstream key={ws.id} ws={ws} readOnly={readOnly} onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
             ))}
             {emptyFilteredWorkstreams.map(ws => (
-              <Workstream key={ws.id} ws={ws} emptyFilterMessage="No tasks match this filter" onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
+              <Workstream key={ws.id} ws={ws} readOnly={readOnly} emptyFilterMessage="No tasks match this filter" onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
             ))}
             <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, #2A2A2E, transparent)", margin: "16px 0" }} />
             <div style={{ background: "#18181B", borderRadius: "10px", padding: "16px", border: "1px solid #2A2A2E" }}>
               <div style={{ fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Quick Notes</div>
-              <QuickNotes notes={data.notes} onAdd={handleAddNote} onDelete={handleDeleteNote} />
+              <QuickNotes notes={effectiveData.notes} readOnly={readOnly} onAdd={handleAddNote} onDelete={handleDeleteNote} />
             </div>
           </>
         )}
         {view === "week" && (
           <>
-            <WeekShape weekShape={data.weekShape} workstreams={data.workstreams} onUpdateDay={handleUpdateDay} onAddDay={handleAddDay} onRemoveDay={handleRemoveDay} />
+            <WeekShape weekShape={effectiveData.weekShape} workstreams={effectiveData.workstreams} readOnly={readOnly} onUpdateDay={handleUpdateDay} onAddDay={handleAddDay} onRemoveDay={handleRemoveDay} />
             <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, #2A2A2E, transparent)", margin: "8px 0" }} />
             <div style={{ marginTop: "16px", background: "#18181B", borderRadius: "10px", padding: "16px", border: "1px solid #2A2A2E" }}>
               <div style={{ fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Quick Notes</div>
-              <QuickNotes notes={data.notes} onAdd={handleAddNote} onDelete={handleDeleteNote} />
+              <QuickNotes notes={effectiveData.notes} readOnly={readOnly} onAdd={handleAddNote} onDelete={handleDeleteNote} />
             </div>
           </>
         )}
@@ -509,7 +551,7 @@ export default function App() {
         )}
       </div>
 
-      <AgentPanel onApplyActions={handleAgentActions} onUndo={handleUndo} getUndoableMessages={getUndoableMessages} isOpen={agentOpen} onToggle={() => setAgentOpen(!agentOpen)} refreshKey={agentRefreshKey} onHistorySaved={handleHistorySaved} getFreshData={getFreshData} />
+      {!readOnly && <AgentPanel onApplyActions={handleAgentActions} onUndo={handleUndo} getUndoableMessages={getUndoableMessages} isOpen={agentOpen} onToggle={() => setAgentOpen(!agentOpen)} refreshKey={agentRefreshKey} onHistorySaved={handleHistorySaved} getFreshData={getFreshData} />}
 
       {syncToast && (
         <div style={{

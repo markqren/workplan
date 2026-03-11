@@ -23,6 +23,7 @@ Tasks can optionally have subtasks and documents arrays:
 }
 Sub-task IDs use letter suffixes (a, b, c...) on the parent ID. When all subtasks are done, the parent auto-sets to DONE.
 completedAt is set automatically when a subtask is toggled done; set to null when toggled back. Do not set completedAt in your actions — the app handles it.
+Subtasks completed before the completedAt feature was added may have completedAt: null even though they are done. Use the update_subtask action to backfill these with a reasonable timestamp so they auto-collapse in the UI.
 Document IDs use "doc-N" format. The subtask_ids array is optional and links a document to specific subtasks.
 
 ## STATUSES
@@ -78,6 +79,12 @@ Always respond with a JSON object (and nothing else) with this shape:
       "type": "delete_subtask",
       "task_id": "SEG-5",
       "subtask_id": "SEG-5a"
+    },
+    {
+      "type": "update_subtask",
+      "task_id": "SEG-5",
+      "subtask_id": "SEG-5a",
+      "updates": { "completedAt": "2026-03-01T00:00:00.000Z" }
     },
     {
       "type": "add_document",

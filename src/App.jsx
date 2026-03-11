@@ -462,6 +462,14 @@ export default function App() {
             );
           }
         }
+        if (action.type === "update_subtask" && action.task_id && action.subtask_id && action.updates) {
+          for (const ws of d.workstreams) {
+            ws.tasks = ws.tasks.map(t => {
+              if (t.id !== action.task_id) return t;
+              return { ...t, subtasks: (t.subtasks || []).map(s => s.id === action.subtask_id ? { ...s, ...action.updates } : s) };
+            });
+          }
+        }
         if (action.type === "add_document" && action.task_id && action.document) {
           for (const ws of d.workstreams) {
             ws.tasks = ws.tasks.map(t => {

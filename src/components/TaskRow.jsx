@@ -254,14 +254,16 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                   style={{
                     display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
                   }}>
-                  {(() => {
-                    const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
-                    return linkedDoc ? (
-                      <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
-                        style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7, flexShrink: 0 }}
-                        onClick={e => e.stopPropagation()}>📄</a>
-                    ) : null;
-                  })()}
+                  <span style={{ width: "14px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {(() => {
+                      const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
+                      return linkedDoc ? (
+                        <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
+                          style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7 }}
+                          onClick={e => e.stopPropagation()}>📄</a>
+                      ) : null;
+                    })()}
+                  </span>
                   <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
                   <span style={{
                     fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
@@ -298,14 +300,16 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                       style={{
                         display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
                       }}>
-                      {(() => {
-                        const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
-                        return linkedDoc ? (
-                          <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
-                            style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7, flexShrink: 0 }}
-                            onClick={e => e.stopPropagation()}>📄</a>
-                        ) : null;
-                      })()}
+                      <span style={{ width: "14px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {(() => {
+                          const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
+                          return linkedDoc ? (
+                            <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
+                              style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7 }}
+                              onClick={e => e.stopPropagation()}>📄</a>
+                          ) : null;
+                        })()}
+                      </span>
                       <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
                       <span style={{
                         fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",

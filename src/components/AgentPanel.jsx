@@ -13,6 +13,7 @@ function actionLabels(actions) {
     if (a.type === "add_document") return `📎 ${a.document?.label || "doc"}`;
     if (a.type === "delete_document") return `📎− ${a.document_id}`;
     if (a.type === "update_document") return `📎↻ ${a.document_id}`;
+    if (a.type === "update_subtask") return `↻ ${a.subtask_id}`;
     if (a.type === "update_context") return "📌 context";
     return null;
   }).filter(Boolean);

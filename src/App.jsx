@@ -206,7 +206,7 @@ export default function App() {
         tasks: ws.tasks.map(t => {
           if (t.id !== taskId) return t;
           const subtasks = (t.subtasks || []).map(s =>
-            s.id === subtaskId ? { ...s, done: !s.done } : s
+            s.id === subtaskId ? { ...s, done: !s.done, completedAt: !s.done ? new Date().toISOString() : null } : s
           );
           const allDone = subtasks.length > 0 && subtasks.every(s => s.done);
           return { ...t, subtasks, ...(allDone ? { status: "DONE" } : {}) };
@@ -224,7 +224,7 @@ export default function App() {
           if (t.id !== taskId) return t;
           const existing = t.subtasks || [];
           const suffix = String.fromCharCode(97 + existing.length); // a, b, c...
-          return { ...t, subtasks: [...existing, { id: `${taskId}${suffix}`, title, done: false }] };
+          return { ...t, subtasks: [...existing, { id: `${taskId}${suffix}`, title, done: false, completedAt: null }] };
         }),
       })),
     }));
@@ -313,7 +313,7 @@ export default function App() {
               if (t.id !== action.task_id) return t;
               const existing = t.subtasks || [];
               const suffix = String.fromCharCode(97 + existing.length);
-              return { ...t, subtasks: [...existing, { id: `${t.id}${suffix}`, title: action.title, done: false }] };
+              return { ...t, subtasks: [...existing, { id: `${t.id}${suffix}`, title: action.title, done: false, completedAt: null }] };
             });
           }
         }
@@ -322,7 +322,7 @@ export default function App() {
             ws.tasks = ws.tasks.map(t => {
               if (t.id !== action.task_id) return t;
               const subtasks = (t.subtasks || []).map(s =>
-                s.id === action.subtask_id ? { ...s, done: !s.done } : s
+                s.id === action.subtask_id ? { ...s, done: !s.done, completedAt: !s.done ? new Date().toISOString() : null } : s
               );
               const allDone = subtasks.length > 0 && subtasks.every(s => s.done);
               return { ...t, subtasks, ...(allDone ? { status: "DONE" } : {}) };

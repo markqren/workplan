@@ -14,14 +14,15 @@ ${contextDoc}
 Tasks can optionally have subtasks and documents arrays:
 { id: "SEG-5", type: "D", title: "...", status: "IN PROGRESS", target: "Mon",
   subtasks: [
-    { id: "SEG-5a", title: "Pull raw data", done: true },
-    { id: "SEG-5b", title: "Join tables", done: false }
+    { id: "SEG-5a", title: "Pull raw data", done: true, completedAt: "2026-03-01T00:00:00.000Z" },
+    { id: "SEG-5b", title: "Join tables", done: false, completedAt: null }
   ],
   documents: [
     { id: "doc-1", label: "Analysis spreadsheet", url: "https://docs.google.com/...", subtask_ids: ["SEG-5a"] }
   ]
 }
 Sub-task IDs use letter suffixes (a, b, c...) on the parent ID. When all subtasks are done, the parent auto-sets to DONE.
+completedAt is set automatically when a subtask is toggled done; set to null when toggled back. Do not set completedAt in your actions — the app handles it.
 Document IDs use "doc-N" format. The subtask_ids array is optional and links a document to specific subtasks.
 
 ## STATUSES

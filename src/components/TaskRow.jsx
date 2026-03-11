@@ -50,9 +50,15 @@ export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelet
   const [newDocLabel, setNewDocLabel] = useState("");
   const [newDocUrl, setNewDocUrl] = useState("");
   const [hoveredSubtask, setHoveredSubtask] = useState(null);
+  const [showOldCompleted, setShowOldCompleted] = useState(false);
 
   const subtasks = task.subtasks || [];
   const doneCount = subtasks.filter(s => s.done).length;
+
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+  const isOldCompleted = (s) => s.done && s.completedAt && (Date.now() - new Date(s.completedAt).getTime()) >= SEVEN_DAYS;
+  const visibleSubtasks = subtasks.filter(s => !isOldCompleted(s));
+  const collapsedSubtasks = subtasks.filter(s => isOldCompleted(s));
 
   const cycleStatus = () => {
     const idx = STATUSES.indexOf(task.status);
@@ -234,21 +240,13 @@ export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelet
         <div style={{ width: "100%", paddingLeft: mobile ? "8px" : "20px" }}>
           {subtasks.length > 0 && (
             <div>
-              {subtasks.map(s => (
+              {visibleSubtasks.map(s => (
                 <div key={s.id}
                   onMouseEnter={() => setHoveredSubtask(s.id)}
                   onMouseLeave={() => setHoveredSubtask(null)}
                   style={{
                     display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
                   }}>
-                  <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
-                  <span style={{
-                    fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
-                    color: s.done ? "#6E6E73" : "#C5C5CA",
-                    textDecoration: s.done ? "line-through" : "none",
-                    opacity: s.done ? 0.6 : 1,
-                    flex: 1,
-                  }}>{s.title}</span>
                   {(() => {
                     const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
                     return linkedDoc ? (
@@ -257,6 +255,14 @@ export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelet
                         onClick={e => e.stopPropagation()}>📄</a>
                     ) : null;
                   })()}
+                  <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
+                  <span style={{
+                    fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
+                    color: s.done ? "#6E6E73" : "#C5C5CA",
+                    textDecoration: s.done ? "line-through" : "none",
+                    opacity: s.done ? 0.6 : 1,
+                    flex: 1,
+                  }}>{s.title}</span>
                   {hoveredSubtask === s.id && (
                     <button onClick={() => onDeleteSubtask(task.id, s.id)} style={{
                       background: "transparent", border: "none", color: "#4A2020", cursor: "pointer",
@@ -265,6 +271,49 @@ export default function TaskRow({ task, wsColor, onStatusChange, onEdit, onDelet
                   )}
                 </div>
               ))}
+              {collapsedSubtasks.length > 0 && (
+                <>
+                  <div
+                    onClick={() => setShowOldCompleted(v => !v)}
+                    onMouseEnter={e => e.currentTarget.style.color = "#6E6E73"}
+                    onMouseLeave={e => e.currentTarget.style.color = "#4A4A4E"}
+                    style={{
+                      fontSize: "9px", color: "#4A4A4E", fontFamily: "'JetBrains Mono', monospace",
+                      cursor: "pointer", padding: "2px 0",
+                    }}
+                  >
+                    {showOldCompleted ? "▾" : "▸"} {collapsedSubtasks.length} older completed
+                  </div>
+                  {showOldCompleted && collapsedSubtasks.map(s => (
+                    <div key={s.id}
+                      onMouseEnter={() => setHoveredSubtask(s.id)}
+                      onMouseLeave={() => setHoveredSubtask(null)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
+                      }}>
+                      {(() => {
+                        const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
+                        return linkedDoc ? (
+                          <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
+                            style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7, flexShrink: 0 }}
+                            onClick={e => e.stopPropagation()}>📄</a>
+                        ) : null;
+                      })()}
+                      <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
+                      <span style={{
+                        fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
+                        color: "#6E6E73", textDecoration: "line-through", opacity: 0.6, flex: 1,
+                      }}>{s.title}</span>
+                      {hoveredSubtask === s.id && (
+                        <button onClick={() => onDeleteSubtask(task.id, s.id)} style={{
+                          background: "transparent", border: "none", color: "#4A2020", cursor: "pointer",
+                          fontSize: "12px", padding: "0 2px", lineHeight: 1,
+                        }}>×</button>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           )}
           {task.documents && task.documents.length > 0 && (

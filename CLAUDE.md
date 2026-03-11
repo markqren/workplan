@@ -44,8 +44,8 @@ The app uses three persistent storage keys:
   status: "IN PROGRESS",  // NOT STARTED | IN PROGRESS | WAITING | DONE
   target: "Mon-Tue",
   subtasks: [         // optional — omit if no sub-tasks
-    { id: "SEG-5a", title: "Pull raw data", done: true },
-    { id: "SEG-5b", title: "Join tables", done: false },
+    { id: "SEG-5a", title: "Pull raw data", done: true, completedAt: "2026-03-01T..." },
+    { id: "SEG-5b", title: "Join tables", done: false, completedAt: null },
   ]
 }
 ```

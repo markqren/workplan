@@ -24,32 +24,32 @@ export const DEFAULT_DATA = {
         {
           id: "SEG-1", type: "N", title: "Reframe segmentation narrative and strategic positioning for May meeting", status: "IN PROGRESS", target: "Mon-Tue",
           subtasks: [
-            { id: "SEG-1a", title: "Reframe F2P: not a linear funnel, one component of broader merchant strategy", done: false },
-            { id: "SEG-1b", title: "Torso sub-segmentation framing: ads-ready vs other stages, decision tree logic", done: false },
-            { id: "SEG-1c", title: "Position relative to Tim 1P segmentation — diplomatic armor for May meeting", done: false },
+            { id: "SEG-1a", title: "Reframe F2P: not a linear funnel, one component of broader merchant strategy", done: false, completedAt: null },
+            { id: "SEG-1b", title: "Torso sub-segmentation framing: ads-ready vs other stages, decision tree logic", done: false, completedAt: null },
+            { id: "SEG-1c", title: "Position relative to Tim 1P segmentation — diplomatic armor for May meeting", done: false, completedAt: null },
           ],
         },
         {
           id: "SEG-2", type: "D", title: "Build segmentation data foundation (1P+3P dataset, Torso SQL, validation)", status: "IN PROGRESS", target: "Mon-Tue",
           subtasks: [
-            { id: "SEG-2a", title: "Build unified 1P + 3P dataset — foundation for everything else", done: false },
-            { id: "SEG-2b", title: "Define Torso sub-segments in SQL — ads-ready framing into data cuts", done: false },
-            { id: "SEG-2c", title: "Validate coverage/overlap numbers for updated narrative", done: false },
+            { id: "SEG-2a", title: "Build unified 1P + 3P dataset — foundation for everything else", done: false, completedAt: null },
+            { id: "SEG-2b", title: "Define Torso sub-segments in SQL — ads-ready framing into data cuts", done: false, completedAt: null },
+            { id: "SEG-2c", title: "Validate coverage/overlap numbers for updated narrative", done: false, completedAt: null },
           ],
         },
         {
           id: "SEG-3", type: "N", title: "Update slide deck with reframed narrative and new data visuals", status: "IN PROGRESS", target: "Tue AM",
           subtasks: [
-            { id: "SEG-3a", title: "Incorporate reframed F2P narrative into deck flow", done: false },
-            { id: "SEG-3b", title: "Add new data visuals and coverage/overlap numbers", done: false },
+            { id: "SEG-3a", title: "Incorporate reframed F2P narrative into deck flow", done: false, completedAt: null },
+            { id: "SEG-3b", title: "Add new data visuals and coverage/overlap numbers", done: false, completedAt: null },
           ],
         },
         {
           id: "SEG-4", type: "D", title: "Respond to stakeholder data requests (Brandye, Mita, Tim)", status: "WAITING", target: "Mon-TBD",
           subtasks: [
-            { id: "SEG-4a", title: "Brandye: Pull external Torso segmentation data — awaiting clarification", done: false },
-            { id: "SEG-4b", title: "Mita: Provide access/docs for Torso segmentation table", done: true },
-            { id: "SEG-4c", title: "Tim Keil: StoreLeads date field, join method, time windows for product metrics", done: true },
+            { id: "SEG-4a", title: "Brandye: Pull external Torso segmentation data — awaiting clarification", done: false, completedAt: null },
+            { id: "SEG-4b", title: "Mita: Provide access/docs for Torso segmentation table", done: true, completedAt: "2026-02-20T00:00:00.000Z" },
+            { id: "SEG-4c", title: "Tim Keil: StoreLeads date field, join method, time windows for product metrics", done: true, completedAt: "2026-02-20T00:00:00.000Z" },
           ],
         },
       ],
@@ -61,8 +61,8 @@ export const DEFAULT_DATA = {
         {
           id: "STP-1", type: "A", title: "Staples EP Health Check cycle prep and backlog triage", status: "NOT STARTED", target: "Tue-Wed",
           subtasks: [
-            { id: "STP-1a", title: "Detail outstanding Staples backlog: brain dump all paused items", done: false },
-            { id: "STP-1b", title: "Confirm needs for next cycle, check in with Agnal/Gobi", done: false },
+            { id: "STP-1a", title: "Detail outstanding Staples backlog: brain dump all paused items", done: false, completedAt: null },
+            { id: "STP-1b", title: "Confirm needs for next cycle, check in with Agnal/Gobi", done: false, completedAt: null },
           ],
         },
       ],

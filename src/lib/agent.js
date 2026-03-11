@@ -1,6 +1,6 @@
 // ── System prompt builder ──────────────────────────────────────────
 
-export const buildSystemPrompt = (trackerData, contextDoc) => `You are an embedded AI agent inside Mark's personal work tracker app. You have deep context about his work, team, and current priorities. You act as both a task management assistant and a strategic thought partner.
+export const buildSystemPrompt = (trackerData, contextDoc, historyLength) => `You are an embedded AI agent inside Mark's personal work tracker app. You have deep context about his work, team, and current priorities. You act as both a task management assistant and a strategic thought partner.
 
 ${contextDoc}
 
@@ -36,6 +36,7 @@ NOT STARTED | IN PROGRESS | WAITING | DONE
 - You can help Mark think through prioritization, prep for meetings, draft responses, or strategize.
 - If Mark shares a screenshot or describes a Slack message, help him triage it and add it to the tracker if needed.
 - When Mark shares a URL or document link, proactively attach it to the relevant task using add_document with a descriptive label. Infer the label from context (e.g. "Q2 segmentation deck", "Staples migration query").
+- If Mark shares important context that should be remembered across sessions (people, preferences, project details, political dynamics), proactively save it using the update_context action. This appends to his editable context document so you'll have this info in future conversations.
 
 ## CURRENT TRACKER STATE
 ${JSON.stringify(trackerData, null, 2)}
@@ -93,24 +94,32 @@ Always respond with a JSON object (and nothing else) with this shape:
       "type": "delete_document",
       "task_id": "SEG-5",
       "document_id": "doc-1"
+    },
+    {
+      "type": "update_context",
+      "text": "Key info to remember for future sessions"
     }
   ]
 }
 
 Note: add_task and update_task can include "subtasks" and "documents" arrays in the task/updates object.
 
-The "actions" array can be empty if no tracker changes are needed. Always include "message". Do NOT wrap the JSON in markdown code fences.`;
+The "actions" array can be empty if no tracker changes are needed. Always include "message". Do NOT wrap the JSON in markdown code fences.${historyLength >= 24 ? `
+
+## IMPORTANT: LONG CONVERSATION
+This conversation has ${historyLength} messages. If any important context has come up that isn't already in the context document above, use the update_context action now to save it before the conversation resets.` : ""}`;
+
 
 // ── API call logic ─────────────────────────────────────────────────
 
-export async function callAgent(recentHistory, data, contextDoc) {
+export async function callAgent(recentHistory, data, contextDoc, historyLength) {
   const response = await fetch("/api/claude", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1000,
-      system: buildSystemPrompt(data, contextDoc),
+      system: buildSystemPrompt(data, contextDoc, historyLength),
       messages: recentHistory,
     }),
   });
@@ -126,5 +135,5 @@ export async function callAgent(recentHistory, data, contextDoc) {
     parsed = { message: text, actions: [] };
   }
 
-  return { parsed, rawJson: text };
+  return { parsed, rawJson: text, usage: result.usage || null };
 }

@@ -31,12 +31,14 @@ export default function App() {
   const [archiveData, setArchiveData] = useState(null);
 
   const dataRef = useRef(null);
+  const contextDocRef = useRef(contextDoc);
   const syncTimestamps = useRef({});
   const undoBuffer = useRef([]);
   const undoEpoch = useRef(0);
   const mobile = useIsMobile();
 
   useEffect(() => { dataRef.current = data; }, [data]);
+  useEffect(() => { contextDocRef.current = contextDoc; }, [contextDoc]);
 
   // ── Auth ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -192,6 +194,18 @@ export default function App() {
     const t = setTimeout(() => setExportToast(false), 2000);
     return () => clearTimeout(t);
   }, [exportToast]);
+
+  // ── Cmd+K to toggle agent panel ────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setAgentOpen(prev => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // ── Handlers ────────────────────────────────────────────────────
 
@@ -471,6 +485,14 @@ export default function App() {
               return { ...t, documents: (t.documents || []).map(doc => doc.id === action.document_id ? { ...doc, ...action.updates } : doc) };
             });
           }
+        }
+        if (action.type === "update_context" && action.text) {
+          const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+          const current = contextDocRef.current || "";
+          const updated = current.trimEnd() + `\n\n## Agent-Learned Notes (${date})\n${action.text}`;
+          setContextDoc(updated);
+          contextDocRef.current = updated;
+          saveContext(updated).then(ts => { if (ts) syncTimestamps.current[CONTEXT_KEY] = ts; });
         }
       }
       return d;

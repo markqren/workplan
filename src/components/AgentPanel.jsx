@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { loadAgentHistory, saveAgentHistory } from "../lib/storage.js";
 import { callAgent } from "../lib/agent.js";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
@@ -13,8 +13,27 @@ function actionLabels(actions) {
     if (a.type === "add_document") return `📎 ${a.document?.label || "doc"}`;
     if (a.type === "delete_document") return `📎− ${a.document_id}`;
     if (a.type === "update_document") return `📎↻ ${a.document_id}`;
+    if (a.type === "update_context") return "📌 context";
     return null;
   }).filter(Boolean);
+}
+
+function renderAgentMarkdown(text) {
+  let html = text
+    .replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, '<code style="background:#2A2A2E;padding:1px 4px;border-radius:3px;font-size:12px;font-family:\'JetBrains Mono\',monospace">$1</code>')
+    .replace(/^### (.+)$/gm, '<div style="font-weight:700;font-size:13px;margin:8px 0 4px">$1</div>')
+    .replace(/^## (.+)$/gm, '<div style="font-weight:700;font-size:14px;margin:8px 0 4px">$1</div>')
+    .replace(/^# (.+)$/gm, '<div style="font-weight:700;font-size:15px;margin:8px 0 4px">$1</div>')
+    .replace(/^- (.+)$/gm, '<div style="padding-left:12px">• $1</div>')
+    .replace(/^\d+\. (.+)$/gm, (_, p1, offset, str) => {
+      const before = str.substring(0, offset);
+      const num = (before.match(/^\d+\. /gm) || []).length + 1;
+      return `<div style="padding-left:12px">${num}. ${p1}</div>`;
+    })
+    .replace(/\n/g, "<br>");
+  return html;
 }
 
 export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages, isOpen, onToggle, refreshKey, onHistorySaved, getFreshData }) {
@@ -23,8 +42,34 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [undoTick, setUndoTick] = useState(0);
+  const [panelSize, setPanelSize] = useState({ width: 420, height: 520 });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const dragRef = useRef(null);
+
+  // Resize handle drag (desktop only)
+  const handleResizeStart = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = panelSize.width;
+    const startH = panelSize.height;
+
+    const handleMove = (e) => {
+      const dw = startX - e.clientX; // dragging left = increase width
+      const dh = startY - e.clientY; // dragging up = increase height
+      setPanelSize({
+        width: Math.min(700, Math.max(320, startW + dw)),
+        height: Math.min(800, Math.max(400, startH + dh)),
+      });
+    };
+    const handleUp = () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+  }, [panelSize]);
 
   useEffect(() => {
     loadAgentHistory().then(h => setMessages(h));
@@ -81,7 +126,7 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
         content: m.role === "user" ? m.content : (m.rawJson || m.content),
       }));
 
-      const { parsed, rawJson } = await callAgent(recentHistory, freshData, freshCtx);
+      const { parsed, rawJson, usage } = await callAgent(recentHistory, freshData, freshCtx, newMessages.length);
 
       if (parsed.actions && parsed.actions.length > 0) {
         onApplyActions(parsed.actions, newMessages.length);
@@ -92,6 +137,7 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
         content: parsed.message || "Done.",
         rawJson,
         actions: parsed.actions || [],
+        usage: usage || null,
       };
       const updated = [...newMessages, assistantMsg];
       setMessages(updated);
@@ -120,14 +166,42 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
 
   const panelStyle = mobile
     ? { position: "fixed", inset: 0, background: "#131316", display: "flex", flexDirection: "column", zIndex: 100 }
-    : { position: "fixed", bottom: "24px", right: "24px", width: "420px", height: "520px", background: "#131316", borderRadius: "16px", border: "1px solid #2A2A2E", display: "flex", flexDirection: "column", zIndex: 100, boxShadow: "0 8px 40px rgba(0,0,0,0.6)" };
+    : { position: "fixed", bottom: "24px", right: "24px", width: `${panelSize.width}px`, height: `${panelSize.height}px`, background: "#131316", borderRadius: "16px", border: "1px solid #2A2A2E", display: "flex", flexDirection: "column", zIndex: 100, boxShadow: "0 8px 40px rgba(0,0,0,0.6)" };
+
+  // Compute last usage for display
+  const lastUsage = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].usage) return messages[i].usage;
+    }
+    return null;
+  })();
 
   return (
     <div style={panelStyle}>
+      {/* Resize handle (desktop only) */}
+      {!mobile && (
+        <div
+          ref={dragRef}
+          onMouseDown={handleResizeStart}
+          style={{
+            position: "absolute", top: 0, left: 0, width: "12px", height: "12px",
+            cursor: "nw-resize", zIndex: 101, borderRadius: "16px 0 0 0",
+          }}
+          title="Drag to resize"
+        >
+          <div style={{ position: "absolute", top: "3px", left: "3px", width: "6px", height: "6px", borderTop: "1.5px solid #4A4A4E", borderLeft: "1.5px solid #4A4A4E", borderRadius: "1px" }} />
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ padding: "14px 18px", borderBottom: "1px solid #2A2A2E", display: "flex", alignItems: "center", gap: "10px" }}>
         <span style={{ fontSize: "16px" }}>⬡</span>
         <span style={{ fontFamily: "'Space Mono', monospace", fontSize: "13px", fontWeight: 700, color: "#E5E5EA", flex: 1 }}>Agent</span>
+        {lastUsage && (
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", color: "#3A3A3E" }}>
+            {(lastUsage.input_tokens || 0) + (lastUsage.output_tokens || 0)} tokens · ~${(((lastUsage.input_tokens || 0) * 0.003 + (lastUsage.output_tokens || 0) * 0.015) / 1000).toFixed(3)}
+          </span>
+        )}
         <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", color: "#4A4A4E" }}>context-aware</span>
         <button onClick={() => { setMessages([]); saveAgentHistory([]).then(ts => onHistorySaved?.(ts)); }} title="Clear history" style={{ background: "transparent", border: "none", color: "#3A3A3E", cursor: "pointer", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>clear</button>
         <button onClick={onToggle} style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: mobile ? "20px" : "16px", padding: "0 4px", minWidth: mobile ? "44px" : "auto", minHeight: mobile ? "44px" : "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
@@ -149,17 +223,28 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
         )}
         {messages.map((msg, i) => (
           <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
-            <div style={{
-              maxWidth: "85%", padding: "10px 14px",
-              borderRadius: msg.role === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
-              background: msg.role === "user" ? "#2A2518" : "#1C1C1E",
-              color: "#E5E5EA", fontSize: "13px", lineHeight: 1.5,
-              fontFamily: "'DM Sans', sans-serif",
-              border: `1px solid ${msg.role === "user" ? "#4A3A18" : "#2A2A2E"}`,
-              whiteSpace: "pre-wrap",
-            }}>
-              {msg.content}
-            </div>
+            {msg.role === "user" ? (
+              <div style={{
+                maxWidth: "85%", padding: "10px 14px",
+                borderRadius: "12px 12px 4px 12px",
+                background: "#2A2518",
+                color: "#E5E5EA", fontSize: "13px", lineHeight: 1.5,
+                fontFamily: "'DM Sans', sans-serif",
+                border: "1px solid #4A3A18",
+                whiteSpace: "pre-wrap",
+              }}>
+                {msg.content}
+              </div>
+            ) : (
+              <div style={{
+                maxWidth: "85%", padding: "10px 14px",
+                borderRadius: "12px 12px 12px 4px",
+                background: "#1C1C1E",
+                color: "#E5E5EA", fontSize: "13px", lineHeight: 1.5,
+                fontFamily: "'DM Sans', sans-serif",
+                border: "1px solid #2A2A2E",
+              }} dangerouslySetInnerHTML={{ __html: renderAgentMarkdown(msg.content) }} />
+            )}
             {msg.actions && msg.actions.length > 0 && (
               <div style={{ maxWidth: "85%", marginTop: "4px", display: "flex", gap: "4px", flexWrap: "wrap", alignItems: "center" }}>
                 {actionLabels(msg.actions).map((a, j) => (

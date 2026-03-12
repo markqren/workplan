@@ -49,6 +49,7 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
   const [editDocuments, setEditDocuments] = useState(task.documents || []);
   const [newDocLabel, setNewDocLabel] = useState("");
   const [newDocUrl, setNewDocUrl] = useState("");
+  const [editStakeholders, setEditStakeholders] = useState((task.stakeholders || []).join(", "));
   const [hoveredSubtask, setHoveredSubtask] = useState(null);
   const [showOldCompleted, setShowOldCompleted] = useState(false);
 
@@ -74,11 +75,13 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
     setEditDocuments((task.documents || []).map(d => ({ ...d })));
     setNewDocLabel("");
     setNewDocUrl("");
+    setEditStakeholders((task.stakeholders || []).join(", "));
     setEditing(true);
   };
 
   const handleSave = () => {
-    onEdit(task.id, { title: editTitle, target: editTarget, subtasks: editSubtasks, documents: editDocuments });
+    const stakeholders = editStakeholders.split(",").map(s => s.trim()).filter(Boolean);
+    onEdit(task.id, { title: editTitle, target: editTarget, subtasks: editSubtasks, documents: editDocuments, stakeholders });
     setEditing(false);
   };
 
@@ -106,6 +109,11 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
           <span style={{ fontSize: "11px", color: "#6E6E73" }}>Target:</span>
           <input value={editTarget} onChange={e => setEditTarget(e.target.value)}
             style={{ background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace", width: "100px" }} />
+        </div>
+        <div style={{ display: "flex", gap: "8px", marginTop: "8px", alignItems: "center" }}>
+          <span style={{ fontSize: "11px", color: "#6E6E73" }}>Stakeholders:</span>
+          <input value={editStakeholders} onChange={e => setEditStakeholders(e.target.value)} placeholder="comma-separated names"
+            style={{ background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace", flex: 1 }} />
         </div>
 
         {/* Sub-tasks section */}
@@ -197,6 +205,13 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
             {subtasks.length > 0 && (
               <span style={{ fontSize: "10px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace" }}>{doneCount}/{subtasks.length}</span>
             )}
+            {(task.stakeholders || []).map(name => (
+              <span key={name} style={{
+                fontSize: "10px", color: "#8E8E93", background: "#2A2A2E",
+                padding: "1px 6px", borderRadius: "3px",
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>{name}</span>
+            ))}
             <div style={{ flex: 1 }} />
             <StatusBadge status={task.status} onClick={cycleStatus} mobile={mobile} />
           </div>
@@ -226,6 +241,13 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                   {doneCount}/{subtasks.length}
                 </span>
               )}
+              {(task.stakeholders || []).map(name => (
+                <span key={name} style={{
+                  fontSize: "10px", color: "#8E8E93", background: "#2A2A2E",
+                  padding: "1px 6px", borderRadius: "3px",
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}>{name}</span>
+              ))}
             </div>
             <div style={{ fontSize: "13px", color: task.status === "DONE" ? "#6E6E73" : "#E5E5EA", lineHeight: 1.5, fontFamily: "'DM Sans', sans-serif", textDecoration: task.status === "DONE" ? "line-through" : "none" }}>
               {task.title}

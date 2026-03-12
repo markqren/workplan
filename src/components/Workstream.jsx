@@ -9,6 +9,7 @@ export default function Workstream({ ws, readOnly, onStatusChange, onEdit, onDel
   const [newTitle, setNewTitle] = useState("");
   const [newType, setNewType] = useState("N");
   const [newTarget, setNewTarget] = useState("");
+  const [newStakeholders, setNewStakeholders] = useState("");
   const [hovered, setHovered] = useState(false);
 
   const total = ws.tasks.length;
@@ -19,8 +20,11 @@ export default function Workstream({ ws, readOnly, onStatusChange, onEdit, onDel
   const handleAdd = () => {
     if (!newTitle.trim()) return;
     const nextNum = ws.tasks.length + 1;
-    onAddTask(ws.id, { id: `${ws.prefix}-${nextNum}`, type: newType, title: newTitle, status: "NOT STARTED", target: newTarget || "TBD" });
-    setNewTitle(""); setNewTarget(""); setAdding(false);
+    const stakeholders = newStakeholders.split(",").map(s => s.trim()).filter(Boolean);
+    const task = { id: `${ws.prefix}-${nextNum}`, type: newType, title: newTitle, status: "NOT STARTED", target: newTarget || "TBD" };
+    if (stakeholders.length > 0) task.stakeholders = stakeholders;
+    onAddTask(ws.id, task);
+    setNewTitle(""); setNewTarget(""); setNewStakeholders(""); setAdding(false);
   };
 
   return (
@@ -73,6 +77,8 @@ export default function Workstream({ ws, readOnly, onStatusChange, onEdit, onDel
                 </select>
                 <input value={newTarget} onChange={e => setNewTarget(e.target.value)} placeholder="Target"
                   style={{ background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", width: "80px", fontFamily: "'JetBrains Mono', monospace", minHeight: mobile ? "44px" : "auto" }} />
+                <input value={newStakeholders} onChange={e => setNewStakeholders(e.target.value)} placeholder="Stakeholders"
+                  style={{ background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "12px", width: "120px", fontFamily: "'JetBrains Mono', monospace", minHeight: mobile ? "44px" : "auto" }} />
                 <div style={{ flex: 1 }} />
                 <button onClick={handleAdd} style={{ background: ws.color, color: "#0D0D0F", border: "none", borderRadius: "4px", padding: mobile ? "8px 16px" : "4px 12px", fontSize: "11px", fontWeight: 600, cursor: "pointer", minHeight: mobile ? "44px" : "auto" }}>Add</button>
                 <button onClick={() => setAdding(false)} style={{ background: "transparent", color: "#6E6E73", border: "1px solid #3A3A3E", borderRadius: "4px", padding: mobile ? "8px 16px" : "4px 12px", fontSize: "11px", cursor: "pointer", minHeight: mobile ? "44px" : "auto" }}>Cancel</button>

@@ -13,6 +13,7 @@ ${contextDoc}
 ## TASK MODEL
 Tasks can optionally have subtasks and documents arrays:
 { id: "SEG-5", type: "D", title: "...", status: "IN PROGRESS", target: "Mon",
+  stakeholders: ["Brandye", "Mita"],
   subtasks: [
     { id: "SEG-5a", title: "Pull raw data", done: true, completedAt: "2026-03-01T00:00:00.000Z" },
     { id: "SEG-5b", title: "Join tables", done: false, completedAt: null }
@@ -38,6 +39,7 @@ NOT STARTED | IN PROGRESS | WAITING | DONE
 - If Mark shares a screenshot or describes a Slack message, help him triage it and add it to the tracker if needed.
 - When Mark shares a URL or document link, proactively attach it to the relevant task using add_document with a descriptive label. Infer the label from context (e.g. "Q2 segmentation deck", "Staples migration query").
 - If Mark shares important context that should be remembered across sessions (people, preferences, project details, political dynamics), proactively save it using the update_context action. This appends to his editable context document so you'll have this info in future conversations.
+- You can create, update, and delete workstreams. When creating, pick a short lowercase id, an uppercase prefix for task IDs, and a hex color that doesn't clash with existing workstreams.
 
 ## CURRENT TRACKER STATE
 ${JSON.stringify(trackerData, null, 2)}
@@ -105,11 +107,24 @@ Always respond with a JSON object (and nothing else) with this shape:
     {
       "type": "update_context",
       "text": "Key info to remember for future sessions"
+    },
+    {
+      "type": "add_workstream",
+      "workstream": { "id": "perf", "name": "Performance", "prefix": "PERF", "color": "#E85D75", "description": "Performance optimization projects" }
+    },
+    {
+      "type": "update_workstream",
+      "workstream_id": "seg",
+      "updates": { "name": "Segmentation v2", "description": "Updated description" }
+    },
+    {
+      "type": "delete_workstream",
+      "workstream_id": "seg"
     }
   ]
 }
 
-Note: add_task and update_task can include "subtasks" and "documents" arrays in the task/updates object.
+Note: add_task and update_task can include "subtasks", "documents", and "stakeholders" arrays in the task/updates object.
 
 The "actions" array can be empty if no tracker changes are needed. Always include "message". Do NOT wrap the JSON in markdown code fences.${historyLength >= 24 ? `
 

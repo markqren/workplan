@@ -494,6 +494,21 @@ export default function App() {
             });
           }
         }
+        if (action.type === "add_workstream" && action.workstream && action.workstream.id && action.workstream.name && action.workstream.prefix && action.workstream.color) {
+          if (!d.workstreams.find(w => w.id === action.workstream.id)) {
+            d.workstreams.push({ ...action.workstream, tasks: action.workstream.tasks || [] });
+          }
+        }
+        if (action.type === "update_workstream" && action.workstream_id && action.updates) {
+          d.workstreams = d.workstreams.map(w => {
+            if (w.id !== action.workstream_id) return w;
+            const { id, ...safeUpdates } = action.updates;
+            return { ...w, ...safeUpdates };
+          });
+        }
+        if (action.type === "delete_workstream" && action.workstream_id) {
+          d.workstreams = d.workstreams.filter(w => w.id !== action.workstream_id);
+        }
         if (action.type === "update_context" && action.text) {
           const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
           const current = contextDocRef.current || "";

@@ -1,6 +1,6 @@
 # ⬡ WORKPLAN — Roadmap & Feature Tracker
 
-**Last updated:** Mar 11, 2026 | Stack: Vite + React + Supabase + Netlify Functions
+**Last updated:** Mar 12, 2026 | Stack: Vite + React + Supabase + Netlify Functions
 
 ---
 
@@ -10,7 +10,6 @@
 |----|------|------|----------|---------|
 | FEA-09 | **Authentication** | Feature | **High** | Add Supabase Auth login gate with email/password. Login screen hides all app content until authenticated. Session persists via Supabase JS client (`onAuthStateChange`). Sign-out button in Header. Update `storage.js` to use session JWT for authenticated Supabase requests. Update RLS policy on `kv_store` to restrict access to authenticated users only (replace the open "Allow all access" policy). Update `claude-proxy.js` to validate the Supabase JWT before proxying to Claude API — reject unauthenticated requests. No signup form needed (single user — create account manually in Supabase dashboard). Prevents unauthorized access to tracker data and agent when deployed publicly. |
 | FEA-10 | **Agent Image Import** | Feature | **High** | Add image upload/paste support to the Agent Panel so Mark can share screenshots (Slack messages, charts, data tables, emails) and have the agent interpret them. Implementation: (1) Add a 📎 button next to the send button in AgentPanel input area. Clicking opens a file picker filtered to images (png, jpg, gif, webp). (2) Support clipboard paste — detect `paste` event on the input field, extract image data from `clipboardData.items`. (3) Convert uploaded/pasted images to base64 data URLs. Show a small thumbnail preview above the input before sending. (4) When sending a message with an image, format the Claude API message content as an array with both `image` and `text` blocks per Claude's vision API format: `[{ type: "image", source: { type: "base64", media_type, data } }, { type: "text", text: "user message" }]`. (5) Update `claude-proxy.js` to pass through the multimodal content format. (6) In chat history, render sent images as small inline thumbnails in the user message bubble. (7) Don't persist base64 image data in agent history (too large) — store a placeholder like "[image attached]" in the saved history. |
-| FEA-16 | **Stakeholders Column** | Feature | **Medium** | Add an optional `stakeholders` field to each task for tracking interested parties. (1) Extend the task model with `stakeholders: ["May", "Jason"]` — an array of name strings. (2) In TaskRow, display stakeholders as small pill/tag badges next to the task metadata (after type and target), styled subtly (e.g. #2A2A2E background, #8E8E93 text, 10px font). (3) Add a stakeholders input to the task add/edit form — comma-separated names or tag-style input. (4) In StatsBar or a new summary, optionally show tasks grouped by stakeholder for "who's waiting on what" visibility. (5) Agent can set stakeholders via `add_task` and `update_task` actions. (6) Filter support — add a stakeholder filter dropdown or let the existing filter bar filter by stakeholder name. |
 
 ---
 
@@ -26,7 +25,7 @@
 ---
 
 <details>
-<summary><strong>Completed</strong> (22 items)</summary>
+<summary><strong>Completed</strong> (24 items)</summary>
 
 | ID | Item | Type | Completed |
 |----|------|------|-----------|
@@ -51,6 +50,8 @@
 | FEA-06 | **Multiple Weeks Navigation** — ← → arrows in Header to browse archived weeks. Read-only mode disables editing across all components (TaskRow, Workstream, WeekShape, QuickNotes). Amber weekLabel indicator and "back to current" link. Agent panel hidden in archive view. | Feature | Mar 11 |
 | FEA-07 | **Export Weekly Summary** — Generates markdown summary (progress stats, tasks by status grouped by workstream with subtask checklists, week shape, notes). Copies to clipboard and downloads as `.md`. Works for both current and archived weeks. | Feature | Mar 11 |
 | FEA-08 | **Agent Panel Improvements** — (a) Markdown rendering in agent responses (bold, code, headers, lists, HTML-escaped). (b) Cmd+K / Ctrl+K keyboard shortcut to toggle panel. (c) Resizable panel via drag handle at top-left corner (320×400 to 700×800, desktop only). (d) Token count + cost estimate display in header. (e) `update_context` action lets agent append to context doc with dated header; nudge at 24+ messages. (f) `update_subtask` action for backfilling `completedAt` on legacy subtasks. | Feature | Mar 11 |
+| FEA-22 | **Agent Workstream CRUD** — Three new agent actions: `add_workstream` (creates workstream with id, name, prefix, color, description, empty tasks array), `update_workstream` (updates name/color/description/prefix by workstream_id, disallows id change), `delete_workstream` (removes workstream by id). Action labels in AgentPanel. Undo supported via existing snapshot buffer. | Feature | Mar 12 |
+| FEA-16 | **Stakeholders Column** — Optional `stakeholders` string array on tasks for tracking interested parties. Displayed as subtle pill badges in TaskRow metadata (both desktop and mobile). Comma-separated input in add and edit forms. Agent can set stakeholders via `add_task` and `update_task` — flows through existing spread operators with no handler changes. | Feature | Mar 12 |
 
 </details>
 

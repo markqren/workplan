@@ -15,6 +15,9 @@ function actionLabels(actions) {
     if (a.type === "update_document") return `📎↻ ${a.document_id}`;
     if (a.type === "update_subtask") return `↻ ${a.subtask_id}`;
     if (a.type === "update_context") return "📌 context";
+    if (a.type === "add_workstream") return `+ ws:${a.workstream?.name || "workstream"}`;
+    if (a.type === "update_workstream") return `↻ ws:${a.workstream_id}`;
+    if (a.type === "delete_workstream") return `− ws:${a.workstream_id}`;
     return null;
   }).filter(Boolean);
 }

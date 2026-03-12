@@ -30,12 +30,26 @@ export default function App() {
   const [archiveIndex, setArchiveIndex] = useState([]);
   const [archiveData, setArchiveData] = useState(null);
 
+  const [offline, setOffline] = useState(!navigator.onLine);
+
   const dataRef = useRef(null);
   const contextDocRef = useRef(contextDoc);
   const syncTimestamps = useRef({});
   const undoBuffer = useRef([]);
   const undoEpoch = useRef(0);
   const mobile = useIsMobile();
+
+  // ── Online/offline detection ─────────────────────────────────────
+  useEffect(() => {
+    const goOffline = () => setOffline(true);
+    const goOnline = () => setOffline(false);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+    };
+  }, []);
 
   useEffect(() => { dataRef.current = data; }, [data]);
   useEffect(() => { contextDocRef.current = contextDoc; }, [contextDoc]);
@@ -576,7 +590,7 @@ export default function App() {
     return <div style={{ minHeight: "100vh", background: "#0D0D0F", display: "flex", alignItems: "center", justifyContent: "center", color: "#6E6E73", fontFamily: "'Space Mono', monospace" }}>Loading...</div>;
   }
 
-  const readOnly = !!viewingArchive;
+  const readOnly = !!viewingArchive || offline;
   const effectiveData = viewingArchive && archiveData ? archiveData : data;
 
   const filteredWorkstreams = effectiveData.workstreams.map(ws => ({
@@ -589,7 +603,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0D0D0F", color: "#E5E5EA", fontFamily: "'DM Sans', sans-serif" }}>
-      <Header data={effectiveData} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onExport={handleExport} onReset={handleReset} viewingArchive={viewingArchive} archiveIndex={archiveIndex} onNavigateWeek={handleNavigateWeek} onJumpToWeek={handleJumpToWeek} />
+      <Header data={effectiveData} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onExport={handleExport} onReset={handleReset} viewingArchive={viewingArchive} archiveIndex={archiveIndex} onNavigateWeek={handleNavigateWeek} onJumpToWeek={handleJumpToWeek} offline={offline} />
 
       <div style={{ padding: mobile ? "16px" : "24px 32px", maxWidth: "960px" }}>
         {view === "tasks" && (

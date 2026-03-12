@@ -20,12 +20,11 @@
 | FEA-11 | **Slack Integration** | Feature | Low | Let the agent draft Slack messages. Could be a new action type `draft_slack` that renders a copyable message in the agent panel, or a direct Slack webhook integration for posting to specific channels. |
 | FEA-12 | **Calendar Awareness** | Feature | Low | Integrate with Google Calendar API so the agent knows about upcoming meetings. Can inform prioritization ("you have a meeting with May in 2 hours, focus on SEG-4") and suggest pre-meeting prep tasks. |
 | FEA-13 | **Weekly Retro** | Feature | Low | Agent generates an end-of-week plan-vs-actual summary: what was planned in the week shape vs what actually got done. Highlights wins, carryover items, and suggested focus for next week. Could auto-generate on Friday or on demand. |
-| FEA-14 | **Offline / PWA** | Feature | Medium | Cache app shell and last-known data for offline viewing. Service Worker for asset caching, IndexedDB for data snapshot. Offline mode is read-only. Add `manifest.json` for Add to Home Screen on mobile. |
 
 ---
 
 <details>
-<summary><strong>Completed</strong> (24 items)</summary>
+<summary><strong>Completed</strong> (25 items)</summary>
 
 | ID | Item | Type | Completed |
 |----|------|------|-----------|
@@ -52,6 +51,7 @@
 | FEA-08 | **Agent Panel Improvements** — (a) Markdown rendering in agent responses (bold, code, headers, lists, HTML-escaped). (b) Cmd+K / Ctrl+K keyboard shortcut to toggle panel. (c) Resizable panel via drag handle at top-left corner (320×400 to 700×800, desktop only). (d) Token count + cost estimate display in header. (e) `update_context` action lets agent append to context doc with dated header; nudge at 24+ messages. (f) `update_subtask` action for backfilling `completedAt` on legacy subtasks. | Feature | Mar 11 |
 | FEA-22 | **Agent Workstream CRUD** — Three new agent actions: `add_workstream` (creates workstream with id, name, prefix, color, description, empty tasks array), `update_workstream` (updates name/color/description/prefix by workstream_id, disallows id change), `delete_workstream` (removes workstream by id). Action labels in AgentPanel. Undo supported via existing snapshot buffer. | Feature | Mar 12 |
 | FEA-16 | **Stakeholders Column** — Optional `stakeholders` string array on tasks for tracking interested parties. Displayed as subtle pill badges in TaskRow metadata (both desktop and mobile). Comma-separated input in add and edit forms. Agent can set stakeholders via `add_task` and `update_task` — flows through existing spread operators with no handler changes. | Feature | Mar 12 |
+| FEA-14 | **Offline / PWA** — Service worker via `vite-plugin-pwa` precaches app shell. localStorage cache layer in `storage.js` mirrors every Supabase read/write for offline fallback. Online/offline detection in App.jsx sets read-only mode when offline, hides agent panel. Amber "offline" indicator in Header. PWA manifest + icons for Add to Home Screen. | Feature | Mar 12 |
 
 </details>
 

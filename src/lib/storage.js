@@ -1,13 +1,34 @@
 import { STORAGE_KEY, AGENT_HISTORY_KEY, CONTEXT_KEY, ARCHIVE_INDEX_KEY } from './constants.js';
 import { supabase } from './supabase.js';
 
+// ── localStorage cache helpers ────────────────────────────────────
+
+function cacheKey(key) { return `cache:${key}`; }
+
+function cacheSet(key, value) {
+  try { localStorage.setItem(cacheKey(key), value); } catch { /* quota */ }
+}
+
+function cacheGet(key) {
+  try { return localStorage.getItem(cacheKey(key)); } catch { return null; }
+}
+
 // ── Raw storage abstraction (Supabase kv_store) ───────────────────
 
 async function get(key) {
-  const { data, error } = await supabase
-    .from('kv_store').select('value').eq('key', key).single();
-  if (error || !data) return null;
-  return { key, value: JSON.stringify(data.value) };
+  try {
+    const { data, error } = await supabase
+      .from('kv_store').select('value').eq('key', key).single();
+    if (error || !data) return null;
+    const value = JSON.stringify(data.value);
+    cacheSet(key, value);
+    return { key, value };
+  } catch {
+    // Offline fallback
+    const cached = cacheGet(key);
+    if (cached) return { key, value: cached };
+    return null;
+  }
 }
 
 async function set(key, value) {
@@ -16,6 +37,7 @@ async function set(key, value) {
     .from('kv_store').upsert({ key, value: parsed }, { onConflict: 'key' })
     .select('updated_at').single();
   if (error) throw error;
+  cacheSet(key, value);
   return { key, value, updatedAt: data?.updated_at || null };
 }
 
@@ -23,6 +45,7 @@ async function del(key) {
   const { error } = await supabase
     .from('kv_store').delete().eq('key', key);
   if (error) throw error;
+  try { localStorage.removeItem(cacheKey(key)); } catch { /* ok */ }
   return { key, deleted: true };
 }
 

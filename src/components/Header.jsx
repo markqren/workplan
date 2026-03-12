@@ -1,7 +1,7 @@
 import { signOut } from '../lib/auth.js';
 import { useIsMobile } from '../hooks/useMediaQuery.js';
 
-export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onExport, onReset, viewingArchive, archiveIndex, onNavigateWeek, onJumpToWeek }) {
+export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onExport, onReset, viewingArchive, archiveIndex, onNavigateWeek, onJumpToWeek, offline }) {
   const mobile = useIsMobile();
 
   const canGoOlder = archiveIndex.length > 0 && (!viewingArchive || archiveIndex.findIndex(e => e.key === viewingArchive) > 0);
@@ -26,8 +26,9 @@ export default function Header({ data, view, setView, filter, setFilter, onNewWe
             {viewingArchive ? (
               <button onClick={() => onJumpToWeek(null)} style={{ background: "transparent", border: "none", color: "#5B8DEF", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>back to current</button>
             ) : (
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#3A3A3E" }}>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#3A3A3E", display: "flex", alignItems: "center", gap: "6px" }}>
                 saved {new Date(data.lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                {offline && <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "#E8A838" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#E8A838", display: "inline-block" }} />offline</span>}
               </span>
             )}
           </>
@@ -50,7 +51,10 @@ export default function Header({ data, view, setView, filter, setFilter, onNewWe
           {viewingArchive ? (
             <button onClick={() => onJumpToWeek(null)} style={{ background: "transparent", border: "none", color: "#5B8DEF", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace", padding: 0 }}>current</button>
           ) : (
-            <span style={{ color: "#3A3A3E" }}>saved {new Date(data.lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+            <span style={{ color: "#3A3A3E", display: "flex", alignItems: "center", gap: "6px" }}>
+              saved {new Date(data.lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {offline && <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", color: "#E8A838" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#E8A838", display: "inline-block" }} />offline</span>}
+            </span>
           )}
         </div>
       )}

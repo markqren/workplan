@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { loadAgentHistory, saveAgentHistory } from "../lib/storage.js";
-import { callAgent } from "../lib/agent.js";
+import { callAgent, AGENT_MODELS } from "../lib/agent.js";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 
 function actionLabels(actions) {
@@ -18,6 +18,7 @@ function actionLabels(actions) {
     if (a.type === "add_workstream") return `+ ws:${a.workstream?.name || "workstream"}`;
     if (a.type === "update_workstream") return `↻ ws:${a.workstream_id}`;
     if (a.type === "delete_workstream") return `− ws:${a.workstream_id}`;
+    if (a.type === "reorder_workstreams") return "↕ ws:reorder";
     return null;
   }).filter(Boolean);
 }
@@ -47,6 +48,7 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
   const [loading, setLoading] = useState(false);
   const [undoTick, setUndoTick] = useState(0);
   const [panelSize, setPanelSize] = useState({ width: 420, height: 520 });
+  const [modelKey, setModelKey] = useState(() => localStorage.getItem("workplan-agent-model") || "sonnet");
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const dragRef = useRef(null);
@@ -130,7 +132,7 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
         content: m.role === "user" ? m.content : (m.rawJson || m.content),
       }));
 
-      const { parsed, rawJson, usage } = await callAgent(recentHistory, freshData, freshCtx, newMessages.length);
+      const { parsed, rawJson, usage } = await callAgent(recentHistory, freshData, freshCtx, newMessages.length, modelKey);
 
       if (parsed.actions && parsed.actions.length > 0) {
         onApplyActions(parsed.actions, newMessages.length);
@@ -142,6 +144,7 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
         rawJson,
         actions: parsed.actions || [],
         usage: usage || null,
+        modelKey,
       };
       const updated = [...newMessages, assistantMsg];
       setMessages(updated);
@@ -175,7 +178,7 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
   // Compute last usage for display
   const lastUsage = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].usage) return messages[i].usage;
+      if (messages[i].usage) return { ...messages[i].usage, modelKey: messages[i].modelKey };
     }
     return null;
   })();
@@ -201,12 +204,28 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
       <div style={{ padding: "14px 18px", borderBottom: "1px solid #2A2A2E", display: "flex", alignItems: "center", gap: "10px" }}>
         <span style={{ fontSize: "16px" }}>⬡</span>
         <span style={{ fontFamily: "'Space Mono', monospace", fontSize: "13px", fontWeight: 700, color: "#E5E5EA", flex: 1 }}>Agent</span>
-        {lastUsage && (
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", color: "#3A3A3E" }}>
-            {(lastUsage.input_tokens || 0) + (lastUsage.output_tokens || 0)} tokens · ~${(((lastUsage.input_tokens || 0) * 0.003 + (lastUsage.output_tokens || 0) * 0.015) / 1000).toFixed(3)}
-          </span>
-        )}
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", color: "#4A4A4E" }}>context-aware</span>
+        {lastUsage && (() => {
+          const m = AGENT_MODELS[lastUsage.modelKey] || AGENT_MODELS[modelKey] || AGENT_MODELS.sonnet;
+          return (
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", color: "#3A3A3E" }}>
+              {(lastUsage.input_tokens || 0) + (lastUsage.output_tokens || 0)} tokens · ~${(((lastUsage.input_tokens || 0) * m.inputCostPer1K + (lastUsage.output_tokens || 0) * m.outputCostPer1K) / 1000).toFixed(3)}
+            </span>
+          );
+        })()}
+        <button
+          onClick={() => {
+            const next = modelKey === "sonnet" ? "haiku" : "sonnet";
+            setModelKey(next);
+            localStorage.setItem("workplan-agent-model", next);
+          }}
+          title={`Switch to ${modelKey === "sonnet" ? "Haiku" : "Sonnet"}`}
+          style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: "9px",
+            color: modelKey === "sonnet" ? "#E8A838" : "#6CC4A1",
+            background: "transparent", border: `1px solid ${modelKey === "sonnet" ? "#4A3A18" : "#1A3A2A"}`,
+            borderRadius: "3px", padding: "1px 6px", cursor: "pointer",
+          }}
+        >{AGENT_MODELS[modelKey].label}</button>
         <button onClick={() => { setMessages([]); saveAgentHistory([]).then(ts => onHistorySaved?.(ts)); }} title="Clear history" style={{ background: "transparent", border: "none", color: "#3A3A3E", cursor: "pointer", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>clear</button>
         <button onClick={onToggle} style={{ background: "transparent", border: "none", color: "#6E6E73", cursor: "pointer", fontSize: mobile ? "20px" : "16px", padding: "0 4px", minWidth: mobile ? "44px" : "auto", minHeight: mobile ? "44px" : "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
       </div>

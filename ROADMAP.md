@@ -1,6 +1,41 @@
 # ⬡ WORKPLAN — Roadmap & Feature Tracker
 
-**Last updated:** Mar 12, 2026 | Stack: Vite + React + Supabase + Netlify Functions
+**Last updated:** Mar 23, 2026 | Stack: Vite + React + Supabase + Netlify Functions
+
+---
+
+## Releases
+
+### v0.4.0 — Mar 23, 2026
+- **Agent model selector** — Toggle between Haiku (fast/cheap) and Sonnet (capable) in the agent panel header. Selection persists across sessions. Cost estimate adjusts to the active model's pricing.
+- **Agent reorder workstreams** — New `reorder_workstreams` action lets the agent rearrange workstream display order.
+- **Context Export for Claude.ai** (FEA-23) — Added to roadmap. "Copy Work Context" button to generate a full markdown snapshot of workplan state for pasting into Claude.ai conversations.
+
+### v0.3.0 — Mar 12, 2026
+- **Offline / PWA** (FEA-14) — Service worker precaches app shell. localStorage mirrors Supabase for offline fallback. Read-only mode when offline. PWA manifest for Add to Home Screen.
+- **Stakeholders column** (FEA-16) — Optional stakeholder tags on tasks, displayed as pill badges. Settable via agent or manual edit.
+- **Agent workstream CRUD** (FEA-22) — Agent can create, update, and delete workstreams.
+- **Agent update_subtask** — Backfill `completedAt` on legacy subtasks so they auto-collapse correctly.
+
+### v0.2.0 — Mar 11, 2026
+- **Week rollover** (FEA-05) — Archive current week, reset statuses, clear activities. Confirm dialog.
+- **Week navigation** (FEA-06) — Browse archived weeks with arrow nav. Read-only mode for past weeks.
+- **Export weekly summary** (FEA-07) — Markdown export of progress, tasks by status, week shape, notes. Copy or download.
+- **Agent panel improvements** (FEA-08) — Markdown rendering, Cmd+K toggle, resizable panel, token/cost display, `update_context` action.
+- **Auto-collapse old subtasks** (FEA-21) — Subtasks completed >7 days ago collapse behind a toggle.
+
+### v0.1.0 — Mar 5, 2026
+- **Mobile responsive layout** (FEA-01) — Touch-friendly across all views with 640px breakpoint.
+- **Tasks/Week/Context view polish** (FEA-02–04) — Workstream styling, editable week cards, context preview with TOC and auto-save.
+- **Related documents** (FEA-19) — Attach doc links to tasks/subtasks via agent or edit mode.
+- **Agent undo** (FEA-20) — Snapshot-based undo for agent actions with 30s expiry.
+
+### v0.0.1 — Mar 3, 2026
+- **Initial release** — Project scaffolded (Vite + React), Supabase storage, Claude API proxy, Netlify deployment.
+- **Code decomposition** (INF-02) — Monolith split into 8 components + lib files.
+- **Authentication login gate** (FEA-09a) — Supabase Auth with session management.
+- **Sub-tasks** (FEA-15) — Nested checklist UI with auto-DONE, agent actions for add/toggle/delete.
+- **Sync-before-write** (FEA-17) — Optimistic UI with conflict detection, auto-refresh on focus.
 
 ---
 
@@ -10,6 +45,7 @@
 |----|------|------|----------|---------|
 | FEA-09 | **Authentication** | Feature | **High** | Add Supabase Auth login gate with email/password. Login screen hides all app content until authenticated. Session persists via Supabase JS client (`onAuthStateChange`). Sign-out button in Header. Update `storage.js` to use session JWT for authenticated Supabase requests. Update RLS policy on `kv_store` to restrict access to authenticated users only (replace the open "Allow all access" policy). Update `claude-proxy.js` to validate the Supabase JWT before proxying to Claude API — reject unauthenticated requests. No signup form needed (single user — create account manually in Supabase dashboard). Prevents unauthorized access to tracker data and agent when deployed publicly. |
 | FEA-10 | **Agent Image Import** | Feature | **High** | Add image upload/paste support to the Agent Panel so Mark can share screenshots (Slack messages, charts, data tables, emails) and have the agent interpret them. Implementation: (1) Add a 📎 button next to the send button in AgentPanel input area. Clicking opens a file picker filtered to images (png, jpg, gif, webp). (2) Support clipboard paste — detect `paste` event on the input field, extract image data from `clipboardData.items`. (3) Convert uploaded/pasted images to base64 data URLs. Show a small thumbnail preview above the input before sending. (4) When sending a message with an image, format the Claude API message content as an array with both `image` and `text` blocks per Claude's vision API format: `[{ type: "image", source: { type: "base64", media_type, data } }, { type: "text", text: "user message" }]`. (5) Update `claude-proxy.js` to pass through the multimodal content format. (6) In chat history, render sent images as small inline thumbnails in the user message bubble. (7) Don't persist base64 image data in agent history (too large) — store a placeholder like "[image attached]" in the saved history. |
+| FEA-23 | **Context Export for Claude.ai** | Feature | **High** | "Copy Work Context" button (in Header or as a new view) that generates a structured markdown snapshot of the full workplan state, optimized for pasting into Claude.ai as conversation context. Includes: (1) **Progress summary** — overall stats (done/active/waiting/not started counts), per-workstream breakdown. (2) **All tasks with current status** — grouped by workstream, with subtask checklists, stakeholders, and linked documents. (3) **Week shape** — current week's day-by-day plan and focus areas. (4) **Recent agent conversations** — last N messages from agent chat history, so Claude.ai can see what's been discussed and decided. (5) **Quick notes** — recent notes with timestamps. (6) **Context document** — the full agent briefing (role, team, projects). Output is a single markdown document designed to fit within Claude.ai's context window. One-click copy to clipboard. Option to include/exclude sections via checkboxes before copying (e.g., skip agent history if too long). Timestamp header so Claude.ai knows how fresh the data is. This lets Mark start a Claude.ai conversation with full work context without manually summarizing. |
 
 ---
 

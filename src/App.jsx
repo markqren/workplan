@@ -523,6 +523,12 @@ export default function App() {
         if (action.type === "delete_workstream" && action.workstream_id) {
           d.workstreams = d.workstreams.filter(w => w.id !== action.workstream_id);
         }
+        if (action.type === "reorder_workstreams" && Array.isArray(action.order)) {
+          const byId = Object.fromEntries(d.workstreams.map(w => [w.id, w]));
+          const reordered = action.order.filter(id => byId[id]).map(id => byId[id]);
+          const remaining = d.workstreams.filter(w => !action.order.includes(w.id));
+          d.workstreams = [...reordered, ...remaining];
+        }
         if (action.type === "update_context" && action.text) {
           const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
           const current = contextDocRef.current || "";

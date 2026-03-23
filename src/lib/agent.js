@@ -39,7 +39,7 @@ NOT STARTED | IN PROGRESS | WAITING | DONE
 - If Mark shares a screenshot or describes a Slack message, help him triage it and add it to the tracker if needed.
 - When Mark shares a URL or document link, proactively attach it to the relevant task using add_document with a descriptive label. Infer the label from context (e.g. "Q2 segmentation deck", "Staples migration query").
 - If Mark shares important context that should be remembered across sessions (people, preferences, project details, political dynamics), proactively save it using the update_context action. This appends to his editable context document so you'll have this info in future conversations.
-- You can create, update, and delete workstreams. When creating, pick a short lowercase id, an uppercase prefix for task IDs, and a hex color that doesn't clash with existing workstreams.
+- You can create, update, delete, and reorder workstreams. When creating, pick a short lowercase id, an uppercase prefix for task IDs, and a hex color that doesn't clash with existing workstreams. Use reorder_workstreams with the full list of workstream IDs in the desired order.
 
 ## CURRENT TRACKER STATE
 ${JSON.stringify(trackerData, null, 2)}
@@ -120,6 +120,10 @@ Always respond with a JSON object (and nothing else) with this shape:
     {
       "type": "delete_workstream",
       "workstream_id": "seg"
+    },
+    {
+      "type": "reorder_workstreams",
+      "order": ["seg", "hz", "stp", "oth"]
     }
   ]
 }
@@ -134,12 +138,18 @@ This conversation has ${historyLength} messages. If any important context has co
 
 // ── API call logic ─────────────────────────────────────────────────
 
-export async function callAgent(recentHistory, data, contextDoc, historyLength) {
+export const AGENT_MODELS = {
+  sonnet: { id: "claude-sonnet-4-20250514", label: "Sonnet", inputCostPer1K: 0.003, outputCostPer1K: 0.015 },
+  haiku: { id: "claude-haiku-4-5-20251001", label: "Haiku", inputCostPer1K: 0.0008, outputCostPer1K: 0.004 },
+};
+
+export async function callAgent(recentHistory, data, contextDoc, historyLength, modelKey = "sonnet") {
+  const model = AGENT_MODELS[modelKey]?.id || AGENT_MODELS.sonnet.id;
   const response = await fetch("/api/claude", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model,
       max_tokens: 1000,
       system: buildSystemPrompt(data, contextDoc, historyLength),
       messages: recentHistory,

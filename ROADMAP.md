@@ -1,10 +1,15 @@
 # ⬡ WORKPLAN — Roadmap & Feature Tracker
 
-**Last updated:** Mar 23, 2026 | Stack: Vite + React + Supabase + Netlify Functions
+**Last updated:** Mar 27, 2026 | Stack: Vite + React + Supabase + Netlify Functions
 
 ---
 
 ## Releases
+
+### v0.5.0 — Mar 27, 2026
+- **Subtask due dates** (FEA-24) — Optional `dueDate` field on subtasks (`YYYY-MM-DD`). Displayed as a compact badge next to each subtask. Highlights red with warning icon when overdue, yellow when within 2 days. Hidden on completed subtasks. Date picker in edit mode. Agent can set `dueDate` when adding or updating subtasks.
+- **Auto-update week label** — Header week label (`"Week of March 24-28"`) now auto-corrects to the current week on every load/refresh, no manual rollover needed.
+- **Subtask completedAt backfill** — Done subtasks missing `completedAt` (legacy data) are automatically timestamped on load so they collapse after 7 days as intended.
 
 ### v0.4.0 — Mar 23, 2026
 - **Agent model selector** — Toggle between Haiku (fast/cheap) and Sonnet (capable) in the agent panel header. Selection persists across sessions. Cost estimate adjusts to the active model's pricing.

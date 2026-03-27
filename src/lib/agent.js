@@ -15,8 +15,8 @@ Tasks can optionally have subtasks and documents arrays:
 { id: "SEG-5", type: "D", title: "...", status: "IN PROGRESS", target: "Mon",
   stakeholders: ["Brandye", "Mita"],
   subtasks: [
-    { id: "SEG-5a", title: "Pull raw data", done: true, completedAt: "2026-03-01T00:00:00.000Z" },
-    { id: "SEG-5b", title: "Join tables", done: false, completedAt: null }
+    { id: "SEG-5a", title: "Pull raw data", done: true, completedAt: "2026-03-01T00:00:00.000Z", dueDate: null },
+    { id: "SEG-5b", title: "Join tables", done: false, completedAt: null, dueDate: "2026-03-28" }
   ],
   documents: [
     { id: "doc-1", label: "Analysis spreadsheet", url: "https://docs.google.com/...", subtask_ids: ["SEG-5a"] }
@@ -24,6 +24,7 @@ Tasks can optionally have subtasks and documents arrays:
 }
 Sub-task IDs use letter suffixes (a, b, c...) on the parent ID. When all subtasks are done, the parent auto-sets to DONE.
 completedAt is set automatically when a subtask is toggled done; set to null when toggled back. Do not set completedAt in your actions — the app handles it.
+dueDate is an optional "YYYY-MM-DD" string for subtask deadlines. The UI highlights subtasks yellow when within 2 days of due, red when overdue. Set dueDate when adding or updating subtasks if a deadline is mentioned or implied.
 Subtasks completed before the completedAt feature was added may have completedAt: null even though they are done. Use the update_subtask action to backfill these with a reasonable timestamp so they auto-collapse in the UI.
 Document IDs use "doc-N" format. The subtask_ids array is optional and links a document to specific subtasks.
 

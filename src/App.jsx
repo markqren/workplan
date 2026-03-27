@@ -14,6 +14,36 @@ import AgentPanel from "./components/AgentPanel.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
 import { generateWeeklySummary } from "./lib/export.js";
 
+// Compute the current week label: "Week of March 24-28"
+function getCurrentWeekLabel() {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const diff = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 0 : -(dayOfWeek - 1);
+  const monday = new Date(now);
+  monday.setDate(monday.getDate() + diff);
+  const friday = new Date(monday);
+  friday.setDate(friday.getDate() + 4);
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  return `Week of ${monthNames[monday.getMonth()]} ${monday.getDate()}-${friday.getDate()}`;
+}
+
+// Backfill completedAt on done subtasks that are missing it (legacy data).
+// Returns the data (mutated in place) and whether any backfills were made.
+function backfillCompletedAt(d) {
+  let changed = false;
+  for (const ws of d.workstreams || []) {
+    for (const t of ws.tasks || []) {
+      for (const s of t.subtasks || []) {
+        if (s.done && !s.completedAt) {
+          s.completedAt = new Date().toISOString();
+          changed = true;
+        }
+      }
+    }
+  }
+  return changed;
+}
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -80,8 +110,14 @@ export default function App() {
       getTimestamp(CONTEXT_KEY),
       getTimestamp(AGENT_HISTORY_KEY),
       loadArchiveIndex(),
-    ]).then(([saved, ctx, dataTs, ctxTs, histTs, idx]) => {
+    ]).then(async ([saved, ctx, dataTs, ctxTs, histTs, idx]) => {
       const d = saved || DEFAULT_DATA;
+      let needsSave = backfillCompletedAt(d);
+      const currentLabel = getCurrentWeekLabel();
+      if (d.weekLabel !== currentLabel) {
+        d.weekLabel = currentLabel;
+        needsSave = true;
+      }
       setData(d);
       dataRef.current = d;
       setContextDoc(ctx || DEFAULT_CONTEXT);
@@ -91,6 +127,10 @@ export default function App() {
         [CONTEXT_KEY]: ctxTs,
         [AGENT_HISTORY_KEY]: histTs,
       };
+      if (needsSave) {
+        const ts = await saveData(d);
+        if (ts) syncTimestamps.current[STORAGE_KEY] = ts;
+      }
       setLoading(false);
     });
   }, [isAuthenticated]);
@@ -146,10 +186,15 @@ export default function App() {
       const promises = [];
 
       if (dataStale) {
-        promises.push(loadData().then(saved => {
+        promises.push(loadData().then(async (saved) => {
           if (saved) {
+            const didBackfill = backfillCompletedAt(saved);
             setData(saved);
             dataRef.current = saved;
+            if (didBackfill) {
+              const ts = await saveData(saved);
+              if (ts) { syncTimestamps.current[STORAGE_KEY] = ts; return; }
+            }
           }
           syncTimestamps.current[STORAGE_KEY] = dataTs;
         }));
@@ -343,15 +388,7 @@ export default function App() {
     }
     setArchiveIndex(index);
 
-    // Generate new week label: "Week of {Mon} {Day}-{Fri Day}"
-    const monday = new Date(now);
-    const dayOfWeek = monday.getDay();
-    const diff = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 0 : -(dayOfWeek - 1);
-    monday.setDate(monday.getDate() + diff);
-    const friday = new Date(monday);
-    friday.setDate(friday.getDate() + 4);
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const weekLabel = `Week of ${monthNames[monday.getMonth()]} ${monday.getDate()}-${friday.getDate()}`;
+    const weekLabel = getCurrentWeekLabel();
 
     // Build new week data
     undoEpoch.current++;

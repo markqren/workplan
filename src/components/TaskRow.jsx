@@ -57,7 +57,28 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
   const doneCount = subtasks.filter(s => s.done).length;
 
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+  const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
   const isOldCompleted = (s) => s.done && s.completedAt && (Date.now() - new Date(s.completedAt).getTime()) >= SEVEN_DAYS;
+
+  const dueDateUrgency = (s) => {
+    if (!s.dueDate || s.done) return null;
+    const diff = new Date(s.dueDate + "T23:59:59").getTime() - Date.now();
+    if (diff < 0) return "overdue";
+    if (diff < TWO_DAYS) return "soon";
+    return null;
+  };
+
+  const dueDateStyle = (urgency) => {
+    if (urgency === "overdue") return { color: "#E85B5B", background: "#2A1A1A", border: "1px solid #4A2A2A" };
+    if (urgency === "soon") return { color: "#E8A838", background: "#2A2518", border: "1px solid #4A3A18" };
+    return { color: "#6E6E73", background: "transparent", border: "1px solid transparent" };
+  };
+
+  const formatDueDate = (dateStr) => {
+    const d = new Date(dateStr + "T00:00:00");
+    const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${mon[d.getMonth()]} ${d.getDate()}`;
+  };
   const visibleSubtasks = subtasks.filter(s => !isOldCompleted(s));
   const collapsedSubtasks = subtasks.filter(s => isOldCompleted(s));
 
@@ -124,6 +145,8 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
               <div key={s.id || i} style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
                 <input value={s.title} onChange={e => handleEditSubtaskTitle(i, e.target.value)}
                   style={{ flex: 1, background: "#0D0D0F", color: "#E5E5EA", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 8px", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }} />
+                <input type="date" value={s.dueDate || ""} onChange={e => setEditSubtasks(prev => prev.map((st, j) => j === i ? { ...st, dueDate: e.target.value || null } : st))}
+                  style={{ background: "#0D0D0F", color: "#8E8E93", border: "1px solid #3A3A3E", borderRadius: "4px", padding: "4px 6px", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", width: "120px" }} />
                 <button onClick={() => handleDeleteEditSubtask(i)} style={{ background: "transparent", border: "none", color: "#4A2020", cursor: "pointer", fontSize: "14px", padding: "2px 4px", minWidth: mobile ? "44px" : "auto", minHeight: mobile ? "44px" : "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
               </div>
             ))}
@@ -269,7 +292,10 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
         <div style={{ width: "100%", paddingLeft: mobile ? "8px" : "20px" }}>
           {subtasks.length > 0 && (
             <div>
-              {visibleSubtasks.map(s => (
+              {visibleSubtasks.map(s => {
+                const urgency = dueDateUrgency(s);
+                const dStyle = dueDateStyle(urgency);
+                return (
                 <div key={s.id}
                   onMouseEnter={() => setHoveredSubtask(s.id)}
                   onMouseLeave={() => setHoveredSubtask(null)}
@@ -294,6 +320,13 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                     opacity: s.done ? 0.6 : 1,
                     flex: 1,
                   }}>{s.title}</span>
+                  {s.dueDate && (
+                    <span style={{
+                      fontSize: "9px", fontFamily: "'JetBrains Mono', monospace",
+                      padding: "1px 6px", borderRadius: "3px", flexShrink: 0,
+                      ...dStyle,
+                    }}>{urgency === "overdue" ? "⚠ " : ""}{formatDueDate(s.dueDate)}</span>
+                  )}
                   {hoveredSubtask === s.id && (
                     <button onClick={() => onDeleteSubtask(task.id, s.id)} style={{
                       background: "transparent", border: "none", color: "#4A2020", cursor: "pointer",
@@ -301,7 +334,8 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                     }}>×</button>
                   )}
                 </div>
-              ))}
+                );
+              })}
               {collapsedSubtasks.length > 0 && (
                 <>
                   <div

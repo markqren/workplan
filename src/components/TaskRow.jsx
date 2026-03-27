@@ -295,6 +295,7 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
               {visibleSubtasks.map(s => {
                 const urgency = dueDateUrgency(s);
                 const dStyle = dueDateStyle(urgency);
+                const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
                 return (
                 <div key={s.id}
                   onMouseEnter={() => setHoveredSubtask(s.id)}
@@ -303,15 +304,19 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                     display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
                   }}>
                   <span style={{ width: "14px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {(() => {
-                      const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
-                      return linkedDoc ? (
-                        <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
-                          style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7 }}
-                          onClick={e => e.stopPropagation()}>📄</a>
-                      ) : null;
-                    })()}
+                    {linkedDoc ? (
+                      <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
+                        style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7 }}
+                        onClick={e => e.stopPropagation()}>📄</a>
+                    ) : null}
                   </span>
+                  {s.dueDate && (
+                    <span style={{
+                      fontSize: "9px", fontFamily: "'JetBrains Mono', monospace",
+                      padding: "1px 6px", borderRadius: "3px", flexShrink: 0,
+                      ...dStyle,
+                    }}>{urgency === "overdue" ? "⚠ " : ""}{formatDueDate(s.dueDate)}</span>
+                  )}
                   <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
                   <span style={{
                     fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
@@ -320,13 +325,6 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                     opacity: s.done ? 0.6 : 1,
                     flex: 1,
                   }}>{s.title}</span>
-                  {s.dueDate && (
-                    <span style={{
-                      fontSize: "9px", fontFamily: "'JetBrains Mono', monospace",
-                      padding: "1px 6px", borderRadius: "3px", flexShrink: 0,
-                      ...dStyle,
-                    }}>{urgency === "overdue" ? "⚠ " : ""}{formatDueDate(s.dueDate)}</span>
-                  )}
                   {hoveredSubtask === s.id && (
                     <button onClick={() => onDeleteSubtask(task.id, s.id)} style={{
                       background: "transparent", border: "none", color: "#4A2020", cursor: "pointer",
@@ -349,7 +347,9 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                   >
                     {showOldCompleted ? "▾" : "▸"} {collapsedSubtasks.length} older completed
                   </div>
-                  {showOldCompleted && collapsedSubtasks.map(s => (
+                  {showOldCompleted && collapsedSubtasks.map(s => {
+                    const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
+                    return (
                     <div key={s.id}
                       onMouseEnter={() => setHoveredSubtask(s.id)}
                       onMouseLeave={() => setHoveredSubtask(null)}
@@ -357,14 +357,11 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                         display: "flex", alignItems: "center", gap: "8px", padding: "2px 0",
                       }}>
                       <span style={{ width: "14px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {(() => {
-                          const linkedDoc = (task.documents || []).find(d => (d.subtask_ids || []).includes(s.id));
-                          return linkedDoc ? (
-                            <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
-                              style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7 }}
-                              onClick={e => e.stopPropagation()}>📄</a>
-                          ) : null;
-                        })()}
+                        {linkedDoc ? (
+                          <a href={linkedDoc.url} target="_blank" rel="noopener noreferrer" title={linkedDoc.label}
+                            style={{ fontSize: "11px", textDecoration: "none", opacity: 0.7 }}
+                            onClick={e => e.stopPropagation()}>📄</a>
+                        ) : null}
                       </span>
                       <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
                       <span style={{
@@ -378,7 +375,8 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                         }}>×</button>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
             </div>

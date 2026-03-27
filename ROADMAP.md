@@ -6,6 +6,9 @@
 
 ## Releases
 
+### v0.5.1 — *pending*
+- **Subtask column reorder** — Due date and linked doc icon now appear to the left of the checkbox for better scannability. Order: `[doc] [due date] [checkbox] [title]`.
+
 ### v0.5.0 — Mar 27, 2026
 - **Subtask due dates** (FEA-24) — Optional `dueDate` field on subtasks (`YYYY-MM-DD`). Displayed as a compact badge next to each subtask. Highlights red with warning icon when overdue, yellow when within 2 days. Hidden on completed subtasks. Date picker in edit mode. Agent can set `dueDate` when adding or updating subtasks.
 - **Auto-update week label** — Header week label (`"Week of March 24-28"`) now auto-corrects to the current week on every load/refresh, no manual rollover needed.

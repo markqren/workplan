@@ -629,30 +629,6 @@ export default function App() {
     });
   }, [persist]);
 
-  const handleTriageSubmit = useCallback(async (input) => {
-    const [freshHistory, { data: freshData, contextDoc: freshCtx }] = await Promise.all([
-      loadAgentHistory(),
-      getFreshData(),
-    ]);
-    const userMsg = { role: "user", content: input };
-    const newMessages = [...freshHistory, userMsg];
-    const recentHistory = newMessages.slice(-20).map(m => ({
-      role: m.role === "user" ? "user" : "assistant",
-      content: m.role === "user" ? m.content : (m.rawJson || m.content),
-    }));
-    const modelKey = localStorage.getItem("workplan-agent-model") || "sonnet";
-    const { parsed, rawJson, usage } = await callAgent(recentHistory, freshData, freshCtx, newMessages.length, modelKey);
-    if (parsed.actions && parsed.actions.length > 0) {
-      handleAgentActions(parsed.actions, newMessages.length);
-    }
-    const assistantMsg = { role: "assistant", content: parsed.message || "Done.", rawJson, actions: parsed.actions || [], usage: usage || null, modelKey };
-    const updated = [...newMessages, assistantMsg];
-    const ts = await saveAgentHistory(updated);
-    if (ts) syncTimestamps.current[AGENT_HISTORY_KEY] = ts;
-    setAgentRefreshKey(k => k + 1);
-    return parsed.message || "Done.";
-  }, [getFreshData, handleAgentActions]);
-
   const handleUndo = useCallback((messageIndex) => {
     const entry = undoBuffer.current.find(e => e.messageIndex === messageIndex);
     if (!entry) return;
@@ -692,6 +668,30 @@ export default function App() {
     if (ctxTs) syncTimestamps.current[CONTEXT_KEY] = ctxTs;
     return { data: d, contextDoc: c };
   }, []);
+
+  const handleTriageSubmit = async (input) => {
+    const [freshHistory, { data: freshData, contextDoc: freshCtx }] = await Promise.all([
+      loadAgentHistory(),
+      getFreshData(),
+    ]);
+    const userMsg = { role: "user", content: input };
+    const newMessages = [...freshHistory, userMsg];
+    const recentHistory = newMessages.slice(-20).map(m => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.role === "user" ? m.content : (m.rawJson || m.content),
+    }));
+    const modelKey = localStorage.getItem("workplan-agent-model") || "sonnet";
+    const { parsed, rawJson, usage } = await callAgent(recentHistory, freshData, freshCtx, newMessages.length, modelKey);
+    if (parsed.actions && parsed.actions.length > 0) {
+      handleAgentActions(parsed.actions, newMessages.length);
+    }
+    const assistantMsg = { role: "assistant", content: parsed.message || "Done.", rawJson, actions: parsed.actions || [], usage: usage || null, modelKey };
+    const updated = [...newMessages, assistantMsg];
+    const ts = await saveAgentHistory(updated);
+    if (ts) syncTimestamps.current[AGENT_HISTORY_KEY] = ts;
+    setAgentRefreshKey(k => k + 1);
+    return parsed.message || "Done.";
+  };
 
   // ── Render ──────────────────────────────────────────────────────
 

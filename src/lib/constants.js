@@ -92,4 +92,9 @@ export const DEFAULT_DATA = {
     { day: "Wed-Fri", focus: "EXECUTE", activities: "Incorporate feedback, SEG-2 data continue, STP-1 backlog dump" },
   ],
   notes: [],
+  todayPlan: {
+    date: null,
+    taskIds: [],
+    userNote: "",
+  },
 };

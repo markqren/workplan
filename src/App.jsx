@@ -12,6 +12,9 @@ import QuickNotes from "./components/QuickNotes.jsx";
 import ContextEditor from "./components/ContextEditor.jsx";
 import AgentPanel from "./components/AgentPanel.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
+import TodayView from "./components/TodayView.jsx";
+import { callAgent } from "./lib/agent.js";
+import { loadAgentHistory, saveAgentHistory } from "./lib/storage.js";
 import { generateWeeklySummary } from "./lib/export.js";
 
 // Compute the current week label: "Week of March 24-28"
@@ -49,7 +52,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState("tasks");
+  const [view, setView] = useState("today");
   const [filter, setFilter] = useState("all");
   const [agentOpen, setAgentOpen] = useState(false);
   const [contextDoc, setContextDoc] = useState(DEFAULT_CONTEXT);
@@ -116,6 +119,12 @@ export default function App() {
       const currentLabel = getCurrentWeekLabel();
       if (d.weekLabel !== currentLabel) {
         d.weekLabel = currentLabel;
+        needsSave = true;
+      }
+      // Daily reset for today plan
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (!d.todayPlan || d.todayPlan.date !== todayStr) {
+        d.todayPlan = { date: todayStr, taskIds: [], userNote: "" };
         needsSave = true;
       }
       setData(d);
@@ -367,6 +376,62 @@ export default function App() {
     if (ts) syncTimestamps.current[CONTEXT_KEY] = ts;
   };
 
+  // ── Today plan handlers ─────────────────────────────────────────
+  const handleUpdateTodayPlan = (updates) => {
+    undoEpoch.current++;
+    persist(d => ({
+      ...d,
+      todayPlan: { ...d.todayPlan, ...updates },
+    }));
+  };
+  const handleAddToToday = (taskId) => {
+    undoEpoch.current++;
+    persist(d => {
+      const plan = d.todayPlan || { date: new Date().toISOString().slice(0, 10), taskIds: [], userNote: "" };
+      if (plan.taskIds.includes(taskId)) return d;
+      return { ...d, todayPlan: { ...plan, taskIds: [...plan.taskIds, taskId] } };
+    });
+  };
+  const handleRemoveFromToday = (taskId) => {
+    undoEpoch.current++;
+    persist(d => ({
+      ...d,
+      todayPlan: { ...d.todayPlan, taskIds: (d.todayPlan?.taskIds || []).filter(id => id !== taskId) },
+    }));
+  };
+  const handleReorderToday = (fromIdx, toIdx) => {
+    undoEpoch.current++;
+    persist(d => {
+      const ids = [...(d.todayPlan?.taskIds || [])];
+      const [moved] = ids.splice(fromIdx, 1);
+      ids.splice(toIdx, 0, moved);
+      return { ...d, todayPlan: { ...d.todayPlan, taskIds: ids } };
+    });
+  };
+  const handleTriageSubmit = useCallback(async (input) => {
+    const [freshHistory, { data: freshData, contextDoc: freshCtx }] = await Promise.all([
+      loadAgentHistory(),
+      getFreshData(),
+    ]);
+    const userMsg = { role: "user", content: input };
+    const newMessages = [...freshHistory, userMsg];
+    const recentHistory = newMessages.slice(-20).map(m => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.role === "user" ? m.content : (m.rawJson || m.content),
+    }));
+    const modelKey = localStorage.getItem("workplan-agent-model") || "sonnet";
+    const { parsed, rawJson, usage } = await callAgent(recentHistory, freshData, freshCtx, newMessages.length, modelKey);
+    if (parsed.actions && parsed.actions.length > 0) {
+      handleAgentActions(parsed.actions, newMessages.length);
+    }
+    const assistantMsg = { role: "assistant", content: parsed.message || "Done.", rawJson, actions: parsed.actions || [], usage: usage || null, modelKey };
+    const updated = [...newMessages, assistantMsg];
+    const ts = await saveAgentHistory(updated);
+    if (ts) syncTimestamps.current[AGENT_HISTORY_KEY] = ts;
+    setAgentRefreshKey(k => k + 1);
+    return parsed.message || "Done.";
+  }, [getFreshData, handleAgentActions]);
+
   const handleNewWeek = async () => {
     if (!confirm("Start a new week? Current data will be archived. Completed tasks will be removed and in-progress tasks reset to NOT STARTED.")) return;
 
@@ -403,6 +468,7 @@ export default function App() {
       })),
       weekShape: d.weekShape.map(day => ({ ...day, focus: "TBD", activities: "" })),
       notes: [],
+      todayPlan: { date: new Date().toISOString().slice(0, 10), taskIds: [], userNote: "" },
     }));
   };
 
@@ -566,6 +632,14 @@ export default function App() {
           const remaining = d.workstreams.filter(w => !action.order.includes(w.id));
           d.workstreams = [...reordered, ...remaining];
         }
+        if (action.type === "set_today_plan" && Array.isArray(action.taskIds)) {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          d.todayPlan = {
+            date: todayStr,
+            taskIds: action.taskIds,
+            userNote: action.userNote || d.todayPlan?.userNote || "",
+          };
+        }
         if (action.type === "update_context" && action.text) {
           const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
           const current = contextDocRef.current || "";
@@ -649,6 +723,23 @@ export default function App() {
       <Header data={effectiveData} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onExport={handleExport} onReset={handleReset} viewingArchive={viewingArchive} archiveIndex={archiveIndex} onNavigateWeek={handleNavigateWeek} onJumpToWeek={handleJumpToWeek} offline={offline} />
 
       <div style={{ padding: mobile ? "16px" : "24px 32px", maxWidth: "960px" }}>
+        {view === "today" && !viewingArchive && (
+          <TodayView
+            data={effectiveData}
+            todayPlan={effectiveData.todayPlan || { date: null, taskIds: [], userNote: "" }}
+            onUpdateTodayPlan={handleUpdateTodayPlan}
+            onAddToToday={handleAddToToday}
+            onRemoveFromToday={handleRemoveFromToday}
+            onReorderToday={handleReorderToday}
+            onStatusChange={handleStatusChange}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onToggleSubtask={handleToggleSubtask}
+            onAddSubtask={handleAddSubtask}
+            onDeleteSubtask={handleDeleteSubtask}
+            onTriageSubmit={handleTriageSubmit}
+          />
+        )}
         {view === "tasks" && (
           <>
             <StatsBar workstreams={effectiveData.workstreams} />

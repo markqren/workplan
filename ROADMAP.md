@@ -1,12 +1,15 @@
 # ⬡ WORKPLAN — Roadmap & Feature Tracker
 
-**Last updated:** Mar 27, 2026 | Stack: Vite + React + Supabase + Netlify Functions
+**Last updated:** Apr 6, 2026 | Stack: Vite + React + Supabase + Netlify Functions
 
 ---
 
 ## Releases
 
-### v0.5.1 — *pending*
+### v0.6.0 — Apr 6, 2026
+- **Today View** (FEA-25) — New "Today" tab (default view) for daily triage and planning. Includes editable focus note, inline AI triage input (ask "what should I work on today?"), priority queue with reorder/remove controls, and "Other Active" section to quickly add tasks. Reuses existing TaskRow with full status cycling and subtask support. Daily auto-reset clears the plan each new day. New `set_today_plan` agent action lets the AI set/reorder today's priorities. Tab order: Today | Tasks | Week | Context.
+
+### v0.5.1 — Mar 27, 2026
 - **Subtask column reorder** — Due date and linked doc icon now appear to the left of the checkbox for better scannability. Order: `[doc] [due date] [checkbox] [title]`.
 
 ### v0.5.0 — Mar 27, 2026
@@ -68,7 +71,7 @@
 ---
 
 <details>
-<summary><strong>Completed</strong> (25 items)</summary>
+<summary><strong>Completed</strong> (26 items)</summary>
 
 | ID | Item | Type | Completed |
 |----|------|------|-----------|
@@ -95,6 +98,7 @@
 | FEA-08 | **Agent Panel Improvements** — (a) Markdown rendering in agent responses (bold, code, headers, lists, HTML-escaped). (b) Cmd+K / Ctrl+K keyboard shortcut to toggle panel. (c) Resizable panel via drag handle at top-left corner (320×400 to 700×800, desktop only). (d) Token count + cost estimate display in header. (e) `update_context` action lets agent append to context doc with dated header; nudge at 24+ messages. (f) `update_subtask` action for backfilling `completedAt` on legacy subtasks. | Feature | Mar 11 |
 | FEA-22 | **Agent Workstream CRUD** — Three new agent actions: `add_workstream` (creates workstream with id, name, prefix, color, description, empty tasks array), `update_workstream` (updates name/color/description/prefix by workstream_id, disallows id change), `delete_workstream` (removes workstream by id). Action labels in AgentPanel. Undo supported via existing snapshot buffer. | Feature | Mar 12 |
 | FEA-16 | **Stakeholders Column** — Optional `stakeholders` string array on tasks for tracking interested parties. Displayed as subtle pill badges in TaskRow metadata (both desktop and mobile). Comma-separated input in add and edit forms. Agent can set stakeholders via `add_task` and `update_task` — flows through existing spread operators with no handler changes. | Feature | Mar 12 |
+| FEA-25 | **Today View** — "Today" top-level tab (default view) with AI-powered daily triage input, priority queue with reorder/remove, "Other Active" click-to-add section, editable focus note, and daily auto-reset. New `set_today_plan` agent action. `todayPlan` data model (date, taskIds, userNote) added to tracker state. New `TodayView.jsx` component. | Feature | Apr 6 |
 | FEA-14 | **Offline / PWA** — Service worker via `vite-plugin-pwa` precaches app shell. localStorage cache layer in `storage.js` mirrors every Supabase read/write for offline fallback. Online/offline detection in App.jsx sets read-only mode when offline, hides agent panel. Amber "offline" indicator in Header. PWA manifest + icons for Add to Home Screen. | Feature | Mar 12 |
 
 </details>
@@ -164,6 +168,7 @@ workplan/
 │   │   ├── WeekShape.jsx           # Weekly planning view (day cards)
 │   │   ├── QuickNotes.jsx          # Inline notes with add/delete
 │   │   ├── ContextEditor.jsx       # Agent briefing document editor
+│   │   ├── TodayView.jsx            # Daily triage + priority queue
 │   │   └── AgentPanel.jsx          # Floating chat panel
 │   │
 │   └── styles/

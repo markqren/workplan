@@ -19,6 +19,7 @@ function actionLabels(actions) {
     if (a.type === "update_workstream") return `↻ ws:${a.workstream_id}`;
     if (a.type === "delete_workstream") return `− ws:${a.workstream_id}`;
     if (a.type === "reorder_workstreams") return "↕ ws:reorder";
+    if (a.type === "set_today_plan") return "📋 today";
     return null;
   }).filter(Boolean);
 }

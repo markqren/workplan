@@ -41,6 +41,8 @@ NOT STARTED | IN PROGRESS | WAITING | DONE
 - When Mark shares a URL or document link, proactively attach it to the relevant task using add_document with a descriptive label. Infer the label from context (e.g. "Q2 segmentation deck", "Staples migration query").
 - If Mark shares important context that should be remembered across sessions (people, preferences, project details, political dynamics), proactively save it using the update_context action. This appends to his editable context document so you'll have this info in future conversations.
 - You can create, update, delete, and reorder workstreams. When creating, pick a short lowercase id, an uppercase prefix for task IDs, and a hex color that doesn't clash with existing workstreams. Use reorder_workstreams with the full list of workstream IDs in the desired order.
+- When Mark asks "what should I work on today?", "triage my tasks", or similar daily planning questions, analyze his active tasks and return a set_today_plan action with prioritized taskIds and a brief userNote summarizing the focus. Consider urgency, due dates, meeting prep, and dependencies.
+- When Mark says "today I just need to finish X" or specifies specific tasks for the day, set the today plan to just those tasks.
 
 ## CURRENT TRACKER STATE
 ${JSON.stringify(trackerData, null, 2)}
@@ -125,6 +127,11 @@ Always respond with a JSON object (and nothing else) with this shape:
     {
       "type": "reorder_workstreams",
       "order": ["seg", "hz", "stp", "oth"]
+    },
+    {
+      "type": "set_today_plan",
+      "taskIds": ["SEG-2", "STP-1"],
+      "userNote": "Focus on segmentation data foundation"
     }
   ]
 }

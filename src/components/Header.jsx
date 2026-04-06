@@ -59,7 +59,7 @@ export default function Header({ data, view, setView, filter, setFilter, onNewWe
         </div>
       )}
       <div style={{ display: "flex", gap: "8px", overflowX: mobile ? "auto" : "visible", WebkitOverflowScrolling: "touch" }}>
-        {[{ id: "tasks", label: "Tasks" }, { id: "week", label: "Week" }, ...(!viewingArchive ? [{ id: "context", label: "Context" }] : [])].map(v => (
+        {[...(!viewingArchive ? [{ id: "today", label: "Today" }] : []), { id: "tasks", label: "Tasks" }, { id: "week", label: "Week" }, ...(!viewingArchive ? [{ id: "context", label: "Context" }] : [])].map(v => (
           <button key={v.id} onClick={() => setView(v.id)} style={{
             background: view === v.id ? "#2A2A2E" : "transparent", color: view === v.id ? "#E5E5EA" : "#6E6E73",
             border: "1px solid", borderColor: view === v.id ? "#3A3A3E" : "transparent",
@@ -69,7 +69,7 @@ export default function Header({ data, view, setView, filter, setFilter, onNewWe
           }}>{v.label}</button>
         ))}
         <div style={{ width: "1px", background: "#2A2A2E", margin: "0 4px", flexShrink: 0 }} />
-        {view !== "context" && ["all", "active", "done"].map(f => (
+        {view !== "context" && view !== "today" && ["all", "active", "done"].map(f => (
           <button key={f} onClick={() => setFilter(f)} style={{
             background: "transparent", color: filter === f ? "#E5E5EA" : "#4A4A4E",
             border: "none", fontSize: "11px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",

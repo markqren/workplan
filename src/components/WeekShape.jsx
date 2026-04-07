@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 
-export default function WeekShape({ weekShape, workstreams, readOnly, onUpdateDay, onAddDay, onRemoveDay }) {
+export default function WeekShape({ weekShape, workstreams, readOnly, onUpdateDay, onAddDay, onRemoveDay, dailyLogs }) {
   const mobile = useIsMobile();
   const [editingIndex, setEditingIndex] = useState(null);
   const [editField, setEditField] = useState(null); // 'focus' | 'activities'
   const [editValue, setEditValue] = useState("");
+  const [expandedLogs, setExpandedLogs] = useState({});
 
   const startEdit = (index, field, currentValue) => {
     setEditingIndex(index);
@@ -103,6 +104,91 @@ export default function WeekShape({ weekShape, workstreams, readOnly, onUpdateDa
           minHeight: mobile ? "44px" : "auto",
         }}>+ Add day</button>
       )}
+
+      {/* Daily Logs for this week */}
+      {dailyLogs && (() => {
+        // Compute this week's Mon-Sun date range
+        const now = new Date();
+        const dayOfWeek = now.getDay();
+        const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const monday = new Date(now);
+        monday.setDate(monday.getDate() + diff);
+        const weekDates = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(monday);
+          d.setDate(d.getDate() + i);
+          weekDates.push(d.toISOString().slice(0, 10));
+        }
+        const weekEntries = weekDates
+          .filter(date => dailyLogs[date])
+          .map(date => ({ date, ...dailyLogs[date] }));
+
+        if (weekEntries.length === 0) return null;
+
+        const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        return (
+          <div style={{ marginTop: "16px" }}>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "1px" }}>
+              Daily Logs
+            </div>
+            {weekEntries.map(entry => {
+              const d = new Date(entry.date + "T12:00:00");
+              const label = `${dayLabels[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()}`;
+              const isExpanded = expandedLogs[entry.date];
+              return (
+                <div key={entry.date} style={{
+                  background: "#1C1C1E", borderRadius: "8px", marginBottom: "6px",
+                  border: "1px solid #2A2A2E", overflow: "hidden",
+                }}>
+                  <div
+                    onClick={() => setExpandedLogs(prev => ({ ...prev, [entry.date]: !prev[entry.date] }))}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "8px 12px", cursor: "pointer",
+                    }}
+                  >
+                    <span style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: "10px",
+                      color: "#6E6E73", transform: isExpanded ? "rotate(90deg)" : "none",
+                      transition: "transform 0.15s", display: "inline-block",
+                    }}>▶</span>
+                    <span style={{
+                      fontFamily: "'Space Mono', monospace", fontSize: "11px",
+                      color: "#E5E5EA", fontWeight: 600,
+                    }}>{label}</span>
+                    {entry.userNote && (
+                      <span style={{
+                        fontSize: "11px", color: "#E8A838", fontStyle: "italic",
+                        fontFamily: "'DM Sans', sans-serif", flex: 1,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>{entry.userNote}</span>
+                    )}
+                    <span style={{
+                      fontFamily: "'JetBrains Mono', monospace", fontSize: "10px",
+                      color: "#4A4A4E",
+                    }}>{entry.taskIds?.length || 0} tasks</span>
+                  </div>
+                  {isExpanded && (
+                    <div style={{ padding: "0 12px 10px 32px" }}>
+                      {entry.log ? (
+                        entry.log.split("\n").map((line, i) => (
+                          <p key={i} style={{
+                            margin: i === 0 ? 0 : "4px 0 0 0", fontSize: "12px",
+                            color: "#C5C5CA", lineHeight: 1.5,
+                            fontFamily: "'DM Sans', sans-serif",
+                          }}>{line || "\u00A0"}</p>
+                        ))
+                      ) : (
+                        <span style={{ fontSize: "11px", color: "#3A3A3E", fontStyle: "italic" }}>No log entry</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
     </div>
   );
 }

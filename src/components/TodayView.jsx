@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { STATUS_CONFIG, STATUSES } from "../lib/constants.js";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 import TaskRow from "./TaskRow.jsx";
@@ -25,7 +25,15 @@ export default function TodayView({
   const [editingNote, setEditingNote] = useState(false);
   const [noteInput, setNoteInput] = useState(todayPlan.userNote || "");
   const [showPicker, setShowPicker] = useState(false);
+  const [editingLog, setEditingLog] = useState(false);
+  const [logInput, setLogInput] = useState(todayPlan.log || "");
+  const [logSummarizing, setLogSummarizing] = useState(false);
   const inputRef = useRef(null);
+
+  // Sync log input when todayPlan.log changes externally (e.g., agent writes it)
+  useEffect(() => {
+    if (!editingLog) setLogInput(todayPlan.log || "");
+  }, [todayPlan.log]);
 
   // Resolve taskIds to actual task objects, preserving order
   const allTasks = data.workstreams.flatMap(ws => ws.tasks.map(t => ({ ...t, wsColor: ws.color, wsId: ws.id })));
@@ -62,6 +70,26 @@ export default function TodayView({
     if (noteInput !== todayPlan.userNote) {
       onUpdateTodayPlan({ userNote: noteInput });
     }
+  };
+
+  const handleLogBlur = () => {
+    setEditingLog(false);
+    if (logInput !== (todayPlan.log || "")) {
+      onUpdateTodayPlan({ log: logInput });
+    }
+  };
+
+  const handleSummarizeDay = async () => {
+    if (logSummarizing) return;
+    setLogSummarizing(true);
+    try {
+      const response = await onTriageSubmit("Summarize my day — write a daily log of what was accomplished, progress made, and any blockers.");
+      // The agent should have used set_today_log action, but show the response too
+      setTriageResponse(response);
+    } catch (err) {
+      setTriageResponse(`Error: ${err.message}`);
+    }
+    setLogSummarizing(false);
   };
 
   return (
@@ -176,57 +204,81 @@ export default function TodayView({
         )}
 
         {todayTasks.map((task, idx) => (
-          <div key={task.id} style={{ display: "flex", gap: "4px", alignItems: "flex-start", marginBottom: "2px" }}>
-            {/* Reorder + remove controls */}
+          <div key={task.id}>
             <div style={{
-              display: "flex", flexDirection: "column", gap: "0px", paddingTop: "8px",
-              flexShrink: 0, width: "20px", alignItems: "center",
+              display: "flex", gap: "4px", alignItems: "flex-start", marginBottom: "0",
+              borderLeft: `3px solid ${task.wsColor || "#4A4A4E"}`,
+              borderRadius: "2px",
+              paddingLeft: "8px",
             }}>
+              {/* Priority number badge */}
+              <div style={{
+                width: "22px", height: "22px", borderRadius: "50%",
+                background: task.wsColor ? `${task.wsColor}22` : "#2A2A2E",
+                border: `1px solid ${task.wsColor || "#4A4A4E"}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, marginTop: "8px",
+              }}>
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: "10px",
+                  fontWeight: 700, color: task.wsColor || "#8E8E93",
+                }}>{idx + 1}</span>
+              </div>
+              {/* Reorder controls */}
+              <div style={{
+                display: "flex", flexDirection: "column", gap: "0px", paddingTop: "8px",
+                flexShrink: 0, width: "20px", alignItems: "center",
+              }}>
+                <button
+                  onClick={() => idx > 0 && onReorderToday(idx, idx - 1)}
+                  disabled={idx === 0}
+                  style={{
+                    background: "transparent", border: "none", color: idx > 0 ? "#6E6E73" : "#2A2A2E",
+                    cursor: idx > 0 ? "pointer" : "default", fontSize: "10px", padding: "0", lineHeight: 1,
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}
+                >▲</button>
+                <button
+                  onClick={() => idx < todayTasks.length - 1 && onReorderToday(idx, idx + 1)}
+                  disabled={idx === todayTasks.length - 1}
+                  style={{
+                    background: "transparent", border: "none",
+                    color: idx < todayTasks.length - 1 ? "#6E6E73" : "#2A2A2E",
+                    cursor: idx < todayTasks.length - 1 ? "pointer" : "default",
+                    fontSize: "10px", padding: "0", lineHeight: 1,
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}
+                >▼</button>
+              </div>
+              {/* Task content */}
+              <div style={{ flex: 1 }}>
+                <TaskRow
+                  task={task}
+                  wsColor={task.wsColor}
+                  readOnly={false}
+                  onStatusChange={onStatusChange}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onToggleSubtask={onToggleSubtask}
+                  onAddSubtask={onAddSubtask}
+                  onDeleteSubtask={onDeleteSubtask}
+                />
+              </div>
+              {/* Remove from today */}
               <button
-                onClick={() => idx > 0 && onReorderToday(idx, idx - 1)}
-                disabled={idx === 0}
+                onClick={() => onRemoveFromToday(task.id)}
+                title="Remove from today"
                 style={{
-                  background: "transparent", border: "none", color: idx > 0 ? "#6E6E73" : "#2A2A2E",
-                  cursor: idx > 0 ? "pointer" : "default", fontSize: "10px", padding: "0", lineHeight: 1,
+                  background: "transparent", border: "none", color: "#4A4A4E",
+                  cursor: "pointer", fontSize: "12px", padding: "10px 4px", flexShrink: 0,
                   fontFamily: "'JetBrains Mono', monospace",
                 }}
-              >▲</button>
-              <button
-                onClick={() => idx < todayTasks.length - 1 && onReorderToday(idx, idx + 1)}
-                disabled={idx === todayTasks.length - 1}
-                style={{
-                  background: "transparent", border: "none",
-                  color: idx < todayTasks.length - 1 ? "#6E6E73" : "#2A2A2E",
-                  cursor: idx < todayTasks.length - 1 ? "pointer" : "default",
-                  fontSize: "10px", padding: "0", lineHeight: 1,
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}
-              >▼</button>
+              >×</button>
             </div>
-            {/* Task content */}
-            <div style={{ flex: 1 }}>
-              <TaskRow
-                task={task}
-                wsColor={task.wsColor}
-                readOnly={false}
-                onStatusChange={onStatusChange}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onToggleSubtask={onToggleSubtask}
-                onAddSubtask={onAddSubtask}
-                onDeleteSubtask={onDeleteSubtask}
-              />
-            </div>
-            {/* Remove from today */}
-            <button
-              onClick={() => onRemoveFromToday(task.id)}
-              title="Remove from today"
-              style={{
-                background: "transparent", border: "none", color: "#4A4A4E",
-                cursor: "pointer", fontSize: "12px", padding: "10px 4px", flexShrink: 0,
-                fontFamily: "'JetBrains Mono', monospace",
-              }}
-            >×</button>
+            {/* Separator line between tasks */}
+            {idx < todayTasks.length - 1 && (
+              <div style={{ height: "1px", background: "#2A2A2E", margin: "6px 0 6px 11px", opacity: 0.5 }} />
+            )}
           </div>
         ))}
 
@@ -288,6 +340,79 @@ export default function TodayView({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Daily Log */}
+      <div style={{
+        background: "#18181B", borderRadius: "10px", padding: "16px",
+        border: "1px solid #2A2A2E", marginBottom: "16px",
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          marginBottom: "10px",
+        }}>
+          <div style={{
+            fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73",
+            textTransform: "uppercase", letterSpacing: "1px",
+          }}>
+            Daily Log
+          </div>
+          <button
+            onClick={handleSummarizeDay}
+            disabled={logSummarizing}
+            style={{
+              background: "transparent", border: "1px solid #2A2A2E", borderRadius: "6px",
+              color: logSummarizing ? "#4A4A4E" : "#6CC4A1", cursor: logSummarizing ? "default" : "pointer",
+              fontSize: "10px", padding: "4px 10px",
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          >
+            {logSummarizing ? "summarizing..." : "ask agent to summarize"}
+          </button>
+        </div>
+
+        {editingLog ? (
+          <textarea
+            autoFocus
+            value={logInput}
+            onChange={e => setLogInput(e.target.value)}
+            onBlur={handleLogBlur}
+            placeholder="Write today's log..."
+            style={{
+              width: "100%", background: "#0D0D0F", color: "#C5C5CA",
+              border: "1px solid #2A2A2E", borderRadius: "6px",
+              padding: "10px 12px", fontSize: "12px", lineHeight: 1.6,
+              fontFamily: "'DM Sans', sans-serif", outline: "none",
+              boxSizing: "border-box", resize: "vertical", minHeight: "80px",
+            }}
+          />
+        ) : (
+          <div
+            onClick={() => { setLogInput(todayPlan.log || ""); setEditingLog(true); }}
+            style={{
+              cursor: "pointer", padding: "8px 12px", background: "#1C1C1E",
+              borderRadius: "6px", minHeight: "40px",
+            }}
+          >
+            {todayPlan.log ? (
+              todayPlan.log.split("\n").map((line, i) => (
+                <p key={i} style={{
+                  margin: i === 0 ? 0 : "6px 0 0 0", fontSize: "12px", color: "#C5C5CA",
+                  lineHeight: 1.6, fontFamily: "'DM Sans', sans-serif",
+                }}>
+                  {line || "\u00A0"}
+                </p>
+              ))
+            ) : (
+              <span style={{
+                fontSize: "12px", color: "#3A3A3E", fontStyle: "italic",
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                Click to write today's log, or ask the agent to summarize...
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Other Active section */}

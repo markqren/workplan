@@ -124,7 +124,26 @@ export default function App() {
       // Daily reset for today plan
       const todayStr = new Date().toISOString().slice(0, 10);
       if (!d.todayPlan || d.todayPlan.date !== todayStr) {
-        d.todayPlan = { date: todayStr, taskIds: [], userNote: "" };
+        // Snapshot previous day's plan into dailyLogs before resetting
+        if (d.todayPlan && d.todayPlan.date) {
+          if (!d.dailyLogs) d.dailyLogs = {};
+          d.dailyLogs[d.todayPlan.date] = {
+            taskIds: d.todayPlan.taskIds || [],
+            userNote: d.todayPlan.userNote || "",
+            log: d.todayPlan.log || "",
+          };
+        }
+        d.todayPlan = { date: todayStr, taskIds: [], userNote: "", log: "" };
+        needsSave = true;
+      }
+      // Ensure log field exists on todayPlan (backfill)
+      if (d.todayPlan && d.todayPlan.log === undefined) {
+        d.todayPlan.log = "";
+        needsSave = true;
+      }
+      // Ensure dailyLogs exists
+      if (!d.dailyLogs) {
+        d.dailyLogs = {};
         needsSave = true;
       }
       setData(d);
@@ -614,7 +633,11 @@ export default function App() {
             date: todayStr,
             taskIds: action.taskIds,
             userNote: action.userNote || d.todayPlan?.userNote || "",
+            log: d.todayPlan?.log || "",
           };
+        }
+        if (action.type === "set_today_log" && typeof action.log === "string") {
+          d.todayPlan = { ...d.todayPlan, log: action.log };
         }
         if (action.type === "update_context" && action.text) {
           const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -758,7 +781,7 @@ export default function App() {
         )}
         {view === "week" && (
           <>
-            <WeekShape weekShape={effectiveData.weekShape} workstreams={effectiveData.workstreams} readOnly={readOnly} onUpdateDay={handleUpdateDay} onAddDay={handleAddDay} onRemoveDay={handleRemoveDay} />
+            <WeekShape weekShape={effectiveData.weekShape} workstreams={effectiveData.workstreams} readOnly={readOnly} onUpdateDay={handleUpdateDay} onAddDay={handleAddDay} onRemoveDay={handleRemoveDay} dailyLogs={effectiveData.dailyLogs || {}} />
             <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, #2A2A2E, transparent)", margin: "8px 0" }} />
             <div style={{ marginTop: "16px", background: "#18181B", borderRadius: "10px", padding: "16px", border: "1px solid #2A2A2E" }}>
               <div style={{ fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "1px" }}>Quick Notes</div>

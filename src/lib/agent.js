@@ -43,6 +43,7 @@ NOT STARTED | IN PROGRESS | WAITING | DONE
 - You can create, update, delete, and reorder workstreams. When creating, pick a short lowercase id, an uppercase prefix for task IDs, and a hex color that doesn't clash with existing workstreams. Use reorder_workstreams with the full list of workstream IDs in the desired order.
 - When Mark asks "what should I work on today?", "triage my tasks", or similar daily planning questions, analyze his active tasks and return a set_today_plan action with prioritized taskIds and a brief userNote summarizing the focus. Consider urgency, due dates, meeting prep, and dependencies.
 - When Mark says "today I just need to finish X" or specifies specific tasks for the day, set the today plan to just those tasks.
+- When Mark asks to "summarize my day", "wrap up", "end of day", or similar, write a concise daily log using set_today_log summarizing tasks completed, progress made, and any blockers.
 
 ## CURRENT TRACKER STATE
 ${JSON.stringify(trackerData, null, 2)}
@@ -132,6 +133,10 @@ Always respond with a JSON object (and nothing else) with this shape:
       "type": "set_today_plan",
       "taskIds": ["SEG-2", "STP-1"],
       "userNote": "Focus on segmentation data foundation"
+    },
+    {
+      "type": "set_today_log",
+      "log": "Summary of today's work..."
     }
   ]
 }

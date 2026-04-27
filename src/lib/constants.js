@@ -96,5 +96,8 @@ export const DEFAULT_DATA = {
     date: null,
     taskIds: [],
     userNote: "",
+    log: "",
+    autoTriaged: false,
   },
+  dailyLogs: {},
 };

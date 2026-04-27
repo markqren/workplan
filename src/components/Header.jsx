@@ -1,8 +1,12 @@
 import { signOut } from '../lib/auth.js';
 import { useIsMobile } from '../hooks/useMediaQuery.js';
 
-export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onExport, onReset, viewingArchive, archiveIndex, onNavigateWeek, onJumpToWeek, offline }) {
+export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onExport, onReset, viewingArchive, archiveIndex, onNavigateWeek, onJumpToWeek, offline, onClearNowPin }) {
   const mobile = useIsMobile();
+
+  const nowPinTask = data?.nowPinTaskId
+    ? data.workstreams?.flatMap(w => w.tasks.map(t => ({ ...t, wsColor: w.color }))).find(t => t.id === data.nowPinTaskId)
+    : null;
 
   const canGoOlder = archiveIndex.length > 0 && (!viewingArchive || archiveIndex.findIndex(e => e.key === viewingArchive) > 0);
   const canGoNewer = !!viewingArchive;
@@ -58,8 +62,43 @@ export default function Header({ data, view, setView, filter, setFilter, onNewWe
           )}
         </div>
       )}
+      {/* Now-pin global indicator */}
+      {nowPinTask && !viewingArchive && (
+        <div style={{
+          background: `linear-gradient(90deg, ${nowPinTask.wsColor || "#6CC4A1"}33 0%, transparent 100%)`,
+          border: `1px solid ${nowPinTask.wsColor || "#6CC4A1"}44`,
+          borderRadius: "6px", padding: "5px 10px", marginBottom: "8px",
+          display: "flex", alignItems: "center", gap: "8px",
+        }}>
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: "9px",
+            color: nowPinTask.wsColor || "#6CC4A1", fontWeight: 700, letterSpacing: "1px",
+          }}>▶ NOW</span>
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: "10px",
+            color: "#8E8E93", fontWeight: 600,
+          }}>{nowPinTask.id}</span>
+          <span style={{
+            fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
+            color: "#E5E5EA", flex: 1,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{nowPinTask.title}</span>
+          {onClearNowPin && (
+            <button
+              onClick={onClearNowPin}
+              title="Unpin"
+              style={{
+                background: "transparent", border: "none", color: "#6E6E73",
+                cursor: "pointer", fontSize: "12px", padding: "0 4px",
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >×</button>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: "8px", overflowX: mobile ? "auto" : "visible", WebkitOverflowScrolling: "touch" }}>
-        {[...(!viewingArchive ? [{ id: "today", label: "Today" }] : []), { id: "tasks", label: "Tasks" }, { id: "week", label: "Week" }, ...(!viewingArchive ? [{ id: "context", label: "Context" }] : [])].map(v => (
+        {[...(!viewingArchive ? [{ id: "today", label: "Today" }] : []), { id: "tasks", label: "Tasks" }, { id: "week", label: "Week" }, ...(!viewingArchive ? [{ id: "retro", label: "Retro" }, { id: "context", label: "Context" }] : [])].map(v => (
           <button key={v.id} onClick={() => setView(v.id)} style={{
             background: view === v.id ? "#2A2A2E" : "transparent", color: view === v.id ? "#E5E5EA" : "#6E6E73",
             border: "1px solid", borderColor: view === v.id ? "#3A3A3E" : "transparent",
@@ -69,7 +108,7 @@ export default function Header({ data, view, setView, filter, setFilter, onNewWe
           }}>{v.label}</button>
         ))}
         <div style={{ width: "1px", background: "#2A2A2E", margin: "0 4px", flexShrink: 0 }} />
-        {view !== "context" && view !== "today" && ["all", "active", "done"].map(f => (
+        {view !== "context" && view !== "today" && view !== "retro" && ["all", "active", "done"].map(f => (
           <button key={f} onClick={() => setFilter(f)} style={{
             background: "transparent", color: filter === f ? "#E5E5EA" : "#4A4A4E",
             border: "none", fontSize: "11px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",

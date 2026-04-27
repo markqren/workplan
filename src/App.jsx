@@ -13,9 +13,11 @@ import ContextEditor from "./components/ContextEditor.jsx";
 import AgentPanel from "./components/AgentPanel.jsx";
 import LoginScreen from "./components/LoginScreen.jsx";
 import TodayView from "./components/TodayView.jsx";
+import WeeklyRetro from "./components/WeeklyRetro.jsx";
 import { callAgent } from "./lib/agent.js";
 import { loadAgentHistory, saveAgentHistory } from "./lib/storage.js";
 import { generateWeeklySummary } from "./lib/export.js";
+import * as M from "./lib/mutations.js";
 
 // Compute the current week label: "Week of March 24-28"
 function getCurrentWeekLabel() {
@@ -124,21 +126,43 @@ export default function App() {
       // Daily reset for today plan
       const todayStr = new Date().toISOString().slice(0, 10);
       if (!d.todayPlan || d.todayPlan.date !== todayStr) {
-        // Snapshot previous day's plan into dailyLogs before resetting
+        // Snapshot previous day's plan into dailyLogs before resetting.
+        // Capture per-task statuses too so the Week view can render
+        // "what got done" for past days without rehydrating the full task.
         if (d.todayPlan && d.todayPlan.date) {
           if (!d.dailyLogs) d.dailyLogs = {};
+          const taskStatusSnap = {};
+          const taskTitleSnap = {};
+          const allTasks = (d.workstreams || []).flatMap(w => w.tasks);
+          for (const id of d.todayPlan.taskIds || []) {
+            const t = allTasks.find(x => x.id === id);
+            if (t) {
+              taskStatusSnap[id] = t.status;
+              taskTitleSnap[id] = t.title;
+            }
+          }
           d.dailyLogs[d.todayPlan.date] = {
             taskIds: d.todayPlan.taskIds || [],
+            taskStatusSnap,
+            taskTitleSnap,
             userNote: d.todayPlan.userNote || "",
             log: d.todayPlan.log || "",
           };
         }
-        d.todayPlan = { date: todayStr, taskIds: [], userNote: "", log: "" };
+        d.todayPlan = { date: todayStr, taskIds: [], userNote: "", log: "", autoTriaged: false };
+        // Clear stale tomorrowDraft (it was for a prior day)
+        d.tomorrowDraft = null;
         needsSave = true;
       }
       // Ensure log field exists on todayPlan (backfill)
       if (d.todayPlan && d.todayPlan.log === undefined) {
         d.todayPlan.log = "";
+        needsSave = true;
+      }
+      // Backfill autoTriaged for legacy data
+      if (d.todayPlan && d.todayPlan.autoTriaged === undefined) {
+        // If the plan already has tasks, the user has clearly already engaged.
+        d.todayPlan.autoTriaged = (d.todayPlan.taskIds || []).length > 0;
         needsSave = true;
       }
       // Ensure dailyLogs exists
@@ -282,6 +306,42 @@ export default function App() {
     return () => clearTimeout(t);
   }, [exportToast]);
 
+  // ── Sunday auto-retro: once per session on Sun/Mon, draft last
+  // week's retrospective in the background if it doesn't exist yet.
+  const sundayAutoFiredRef = useRef(false);
+  useEffect(() => {
+    if (sundayAutoFiredRef.current) return;
+    if (loading || !data) return;
+
+    const today = new Date();
+    const dow = today.getDay();
+    if (dow !== 0 && dow !== 1) return;
+
+    // Compute previous-week Monday key
+    const todayIso = today.toISOString().slice(0, 10);
+    const d = new Date(todayIso + "T12:00:00");
+    const offset = d.getDay() === 0 ? -6 : 1 - d.getDay();
+    d.setDate(d.getDate() + offset - 7);
+    const prevWeekKey = d.toISOString().slice(0, 10);
+
+    if (data.weeklyRetros?.[prevWeekKey]) return;
+
+    // Session flag in sessionStorage so we only fire once per session per day
+    const flagKey = `sunday-retro-fired:${prevWeekKey}`;
+    if (sessionStorage.getItem(flagKey)) return;
+    sessionStorage.setItem(flagKey, "1");
+    sundayAutoFiredRef.current = true;
+
+    handleTriageSubmit(
+      `Background task: It's ${["Sunday", "Monday"][dow]} and last week's retro hasn't been generated. ` +
+      `Generate a weekly retrospective for the week of ${prevWeekKey} (Monday). Review daily logs, completed tasks, ` +
+      `and rollovers. Call set_weekly_retro with weekKey="${prevWeekKey}" and a structured retro: ` +
+      `summary (2-3 sentences), wins (concrete completions with task ids), carryover (what's pushing into this week and why), ` +
+      `decisions (notable choices), nextWeekFocus (one-line). Be specific.`
+    ).catch(err => console.warn("Sunday auto-retro failed:", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, data?.weeklyRetros]);
+
   // ── Cmd+K to toggle agent panel ────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -296,99 +356,28 @@ export default function App() {
 
   // ── Handlers ────────────────────────────────────────────────────
 
-  const handleStatusChange = (taskId, newStatus) => {
+  // Wrapper: every manual mutation bumps the undo epoch (invalidates
+  // outstanding agent-undo buttons) and runs through persist().
+  const mutate = useCallback((fn) => {
     undoEpoch.current++;
-    persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t) })) }));
-  };
-  const handleEdit = (taskId, updates) => {
-    undoEpoch.current++;
-    persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t) })) }));
-  };
-  const handleDelete = (taskId) => {
-    undoEpoch.current++;
-    persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ({ ...ws, tasks: ws.tasks.filter(t => t.id !== taskId) })) }));
-  };
-  const handleAddTask = (wsId, task) => {
-    undoEpoch.current++;
-    persist(d => ({ ...d, workstreams: d.workstreams.map(ws => ws.id === wsId ? { ...ws, tasks: [...ws.tasks, task] } : ws) }));
-  };
-  const handleToggleSubtask = (taskId, subtaskId) => {
-    undoEpoch.current++;
-    persist(d => ({
-      ...d,
-      workstreams: d.workstreams.map(ws => ({
-        ...ws,
-        tasks: ws.tasks.map(t => {
-          if (t.id !== taskId) return t;
-          const subtasks = (t.subtasks || []).map(s =>
-            s.id === subtaskId ? { ...s, done: !s.done, completedAt: !s.done ? new Date().toISOString() : null } : s
-          );
-          const allDone = subtasks.length > 0 && subtasks.every(s => s.done);
-          return { ...t, subtasks, ...(allDone ? { status: "DONE" } : {}) };
-        }),
-      })),
-    }));
-  };
-  const handleAddSubtask = (taskId, title) => {
-    undoEpoch.current++;
-    persist(d => ({
-      ...d,
-      workstreams: d.workstreams.map(ws => ({
-        ...ws,
-        tasks: ws.tasks.map(t => {
-          if (t.id !== taskId) return t;
-          const existing = t.subtasks || [];
-          const suffix = String.fromCharCode(97 + existing.length); // a, b, c...
-          return { ...t, subtasks: [...existing, { id: `${taskId}${suffix}`, title, done: false, completedAt: null }] };
-        }),
-      })),
-    }));
-  };
-  const handleDeleteSubtask = (taskId, subtaskId) => {
-    undoEpoch.current++;
-    persist(d => ({
-      ...d,
-      workstreams: d.workstreams.map(ws => ({
-        ...ws,
-        tasks: ws.tasks.map(t =>
-          t.id !== taskId ? t : { ...t, subtasks: (t.subtasks || []).filter(s => s.id !== subtaskId) }
-        ),
-      })),
-    }));
-  };
-  const handleAddNote = (note) => {
-    undoEpoch.current++;
-    persist(d => ({ ...d, notes: [note, ...d.notes] }));
-  };
-  const handleDeleteNote = (idx) => {
-    undoEpoch.current++;
-    persist(d => ({ ...d, notes: d.notes.filter((_, i) => i !== idx) }));
-  };
+    persist(fn);
+  }, [persist]);
+
+  const handleStatusChange = (taskId, newStatus) => mutate(d => M.updateTask(d, taskId, { status: newStatus }));
+  const handleEdit = (taskId, updates) => mutate(d => M.updateTask(d, taskId, updates));
+  const handleDelete = (taskId) => mutate(d => M.deleteTask(d, taskId));
+  const handleAddTask = (wsId, task) => mutate(d => M.addTask(d, wsId, task));
+  const handleToggleSubtask = (taskId, subtaskId) => mutate(d => M.toggleSubtask(d, taskId, subtaskId));
+  const handleAddSubtask = (taskId, title) => mutate(d => M.addSubtask(d, taskId, title));
+  const handleDeleteSubtask = (taskId, subtaskId) => mutate(d => M.deleteSubtask(d, taskId, subtaskId));
+  const handleAddNote = (note) => mutate(d => ({ ...d, notes: [note, ...(d.notes || [])] }));
+  const handleDeleteNote = (idx) => mutate(d => M.deleteNote(d, idx));
   const handleReset = () => {
-    undoEpoch.current++;
-    if (confirm("Reset all data to defaults? This cannot be undone.")) persist(() => DEFAULT_DATA);
+    if (confirm("Reset all data to defaults? This cannot be undone.")) mutate(() => DEFAULT_DATA);
   };
-  const handleUpdateDay = (index, updates) => {
-    undoEpoch.current++;
-    persist(d => ({
-      ...d,
-      weekShape: d.weekShape.map((day, i) => i === index ? { ...day, ...updates } : day)
-    }));
-  };
-  const handleAddDay = () => {
-    undoEpoch.current++;
-    persist(d => ({
-      ...d,
-      weekShape: [...d.weekShape, { day: "New Day", focus: "TBD", activities: "" }]
-    }));
-  };
-  const handleRemoveDay = (index) => {
-    undoEpoch.current++;
-    persist(d => ({
-      ...d,
-      weekShape: d.weekShape.filter((_, i) => i !== index)
-    }));
-  };
+  const handleUpdateDay = (index, updates) => mutate(d => M.updateDay(d, index, updates));
+  const handleAddDay = () => mutate(d => M.addDay(d));
+  const handleRemoveDay = (index) => mutate(d => M.removeDay(d, index));
   const handleContextSave = async (text) => {
     setContextDoc(text);
     const ts = await saveContext(text);
@@ -396,37 +385,27 @@ export default function App() {
   };
 
   // ── Today plan handlers ─────────────────────────────────────────
-  const handleUpdateTodayPlan = (updates) => {
-    undoEpoch.current++;
-    persist(d => ({
-      ...d,
-      todayPlan: { ...d.todayPlan, ...updates },
-    }));
-  };
-  const handleAddToToday = (taskId) => {
-    undoEpoch.current++;
-    persist(d => {
-      const plan = d.todayPlan || { date: new Date().toISOString().slice(0, 10), taskIds: [], userNote: "" };
-      if (plan.taskIds.includes(taskId)) return d;
-      return { ...d, todayPlan: { ...plan, taskIds: [...plan.taskIds, taskId] } };
+  const handleUpdateTodayPlan = (updates) => mutate(d => M.updateTodayPlan(d, updates));
+  const handleAddToToday = (taskId) => mutate(d => M.addToToday(d, taskId));
+  const handleRemoveFromToday = (taskId) => mutate(d => M.removeFromToday(d, taskId));
+  const handleReorderToday = (fromIdx, toIdx) => mutate(d => M.reorderToday(d, fromIdx, toIdx));
+
+  // Now pin
+  const handleSetNowPin = (taskId) => mutate(d => M.setNowPin(d, taskId));
+  const handleClearNowPin = () => mutate(d => M.clearNowPin(d));
+
+  // Accept the agent-drafted tomorrow plan as today's plan (used when the
+  // user opens the app the next morning and the previous evening's draft
+  // is still sitting there).
+  const handleAcceptTomorrowDraft = () => {
+    mutate(d => {
+      const draft = d.tomorrowDraft;
+      if (!draft || !Array.isArray(draft.taskIds)) return d;
+      const next = M.setTodayPlan(d, draft.taskIds, draft.userNote);
+      return { ...next, tomorrowDraft: null };
     });
   };
-  const handleRemoveFromToday = (taskId) => {
-    undoEpoch.current++;
-    persist(d => ({
-      ...d,
-      todayPlan: { ...d.todayPlan, taskIds: (d.todayPlan?.taskIds || []).filter(id => id !== taskId) },
-    }));
-  };
-  const handleReorderToday = (fromIdx, toIdx) => {
-    undoEpoch.current++;
-    persist(d => {
-      const ids = [...(d.todayPlan?.taskIds || [])];
-      const [moved] = ids.splice(fromIdx, 1);
-      ids.splice(toIdx, 0, moved);
-      return { ...d, todayPlan: { ...d.todayPlan, taskIds: ids } };
-    });
-  };
+  const handleDismissTomorrowDraft = () => mutate(d => ({ ...d, tomorrowDraft: null }));
   const handleNewWeek = async () => {
     if (!confirm("Start a new week? Current data will be archived. Completed tasks will be removed and in-progress tasks reset to NOT STARTED.")) return;
 
@@ -463,7 +442,7 @@ export default function App() {
       })),
       weekShape: d.weekShape.map(day => ({ ...day, focus: "TBD", activities: "" })),
       notes: [],
-      todayPlan: { date: new Date().toISOString().slice(0, 10), taskIds: [], userNote: "" },
+      todayPlan: { date: new Date().toISOString().slice(0, 10), taskIds: [], userNote: "", log: "", autoTriaged: false },
     }));
   };
 
@@ -525,138 +504,44 @@ export default function App() {
       { snapshot, messageIndex, ts: Date.now(), epoch: undoEpoch.current }
     ];
 
-    persist(prev => {
-      let d = JSON.parse(JSON.stringify(prev));
-      for (const action of actions) {
-        if (action.type === "add_task" && action.workstream_id && action.task) {
-          const ws = d.workstreams.find(w => w.id === action.workstream_id);
-          if (ws) ws.tasks.push(action.task);
-        }
-        if (action.type === "update_task" && action.task_id && action.updates) {
-          for (const ws of d.workstreams) {
-            ws.tasks = ws.tasks.map(t => t.id === action.task_id ? { ...t, ...action.updates } : t);
-          }
-        }
-        if (action.type === "delete_task" && action.task_id) {
-          for (const ws of d.workstreams) {
-            ws.tasks = ws.tasks.filter(t => t.id !== action.task_id);
-          }
-        }
-        if (action.type === "add_note" && action.text) {
-          d.notes = [{ text: action.text, ts: new Date().toISOString() }, ...d.notes];
-        }
-        if (action.type === "add_subtask" && action.task_id && action.title) {
-          for (const ws of d.workstreams) {
-            ws.tasks = ws.tasks.map(t => {
-              if (t.id !== action.task_id) return t;
-              const existing = t.subtasks || [];
-              const suffix = String.fromCharCode(97 + existing.length);
-              return { ...t, subtasks: [...existing, { id: `${t.id}${suffix}`, title: action.title, done: false, completedAt: null }] };
-            });
-          }
-        }
-        if (action.type === "toggle_subtask" && action.task_id && action.subtask_id) {
-          for (const ws of d.workstreams) {
-            ws.tasks = ws.tasks.map(t => {
-              if (t.id !== action.task_id) return t;
-              const subtasks = (t.subtasks || []).map(s =>
-                s.id === action.subtask_id ? { ...s, done: !s.done, completedAt: !s.done ? new Date().toISOString() : null } : s
-              );
-              const allDone = subtasks.length > 0 && subtasks.every(s => s.done);
-              return { ...t, subtasks, ...(allDone ? { status: "DONE" } : {}) };
-            });
-          }
-        }
-        if (action.type === "delete_subtask" && action.task_id && action.subtask_id) {
-          for (const ws of d.workstreams) {
-            ws.tasks = ws.tasks.map(t =>
-              t.id !== action.task_id ? t : { ...t, subtasks: (t.subtasks || []).filter(s => s.id !== action.subtask_id) }
-            );
-          }
-        }
-        if (action.type === "update_subtask" && action.task_id && action.subtask_id && action.updates) {
-          for (const ws of d.workstreams) {
-            ws.tasks = ws.tasks.map(t => {
-              if (t.id !== action.task_id) return t;
-              return { ...t, subtasks: (t.subtasks || []).map(s => s.id === action.subtask_id ? { ...s, ...action.updates } : s) };
-            });
-          }
-        }
-        if (action.type === "add_document" && action.task_id && action.document) {
-          for (const ws of d.workstreams) {
-            ws.tasks = ws.tasks.map(t => {
-              if (t.id !== action.task_id) return t;
-              return { ...t, documents: [...(t.documents || []), action.document] };
-            });
-          }
-        }
-        if (action.type === "delete_document" && action.task_id && action.document_id) {
-          for (const ws of d.workstreams) {
-            ws.tasks = ws.tasks.map(t => {
-              if (t.id !== action.task_id) return t;
-              return { ...t, documents: (t.documents || []).filter(doc => doc.id !== action.document_id) };
-            });
-          }
-        }
-        if (action.type === "update_document" && action.task_id && action.document_id && action.updates) {
-          for (const ws of d.workstreams) {
-            ws.tasks = ws.tasks.map(t => {
-              if (t.id !== action.task_id) return t;
-              return { ...t, documents: (t.documents || []).map(doc => doc.id === action.document_id ? { ...doc, ...action.updates } : doc) };
-            });
-          }
-        }
-        if (action.type === "add_workstream" && action.workstream && action.workstream.id && action.workstream.name && action.workstream.prefix && action.workstream.color) {
-          if (!d.workstreams.find(w => w.id === action.workstream.id)) {
-            d.workstreams.push({ ...action.workstream, tasks: action.workstream.tasks || [] });
-          }
-        }
-        if (action.type === "update_workstream" && action.workstream_id && action.updates) {
-          d.workstreams = d.workstreams.map(w => {
-            if (w.id !== action.workstream_id) return w;
-            const { id, ...safeUpdates } = action.updates;
-            return { ...w, ...safeUpdates };
-          });
-        }
-        if (action.type === "delete_workstream" && action.workstream_id) {
-          d.workstreams = d.workstreams.filter(w => w.id !== action.workstream_id);
-        }
-        if (action.type === "reorder_workstreams" && Array.isArray(action.order)) {
-          const byId = Object.fromEntries(d.workstreams.map(w => [w.id, w]));
-          const reordered = action.order.filter(id => byId[id]).map(id => byId[id]);
-          const remaining = d.workstreams.filter(w => !action.order.includes(w.id));
-          d.workstreams = [...reordered, ...remaining];
-        }
-        if (action.type === "set_today_plan" && Array.isArray(action.taskIds)) {
-          const todayStr = new Date().toISOString().slice(0, 10);
-          d.todayPlan = {
-            date: todayStr,
-            taskIds: action.taskIds,
-            userNote: action.userNote || d.todayPlan?.userNote || "",
-            log: d.todayPlan?.log || "",
-          };
-        }
-        if (action.type === "set_today_log" && typeof action.log === "string") {
-          d.todayPlan = { ...d.todayPlan, log: action.log };
-        }
-        if (action.type === "update_context" && action.text) {
-          const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-          const current = contextDocRef.current || "";
-          const updated = current.trimEnd() + `\n\n## Agent-Learned Notes (${date})\n${action.text}`;
-          setContextDoc(updated);
-          contextDocRef.current = updated;
-          saveContext(updated).then(ts => { if (ts) syncTimestamps.current[CONTEXT_KEY] = ts; });
-        }
-      }
-      return d;
-    });
+    // Context-doc updates have to be flushed after persist() returns
+    // so we batch them here and apply once.
+    let nextContext = null;
+
+    persist(prev => M.applyAgentActions(prev, actions, {
+      onContextUpdate: (fn) => {
+        nextContext = fn(nextContext != null ? nextContext : contextDocRef.current || "");
+      },
+    }));
+
+    if (nextContext != null) {
+      setContextDoc(nextContext);
+      contextDocRef.current = nextContext;
+      saveContext(nextContext).then(ts => { if (ts) syncTimestamps.current[CONTEXT_KEY] = ts; });
+    }
   }, [persist]);
 
-  const handleUndo = useCallback((messageIndex) => {
+  const handleUndo = useCallback(async (messageIndex) => {
     const entry = undoBuffer.current.find(e => e.messageIndex === messageIndex);
     if (!entry) return;
     persist(() => entry.snapshot);
     undoBuffer.current = undoBuffer.current.filter(e => e.messageIndex !== messageIndex);
+
+    // Tag the corresponding assistant message as undone so the agent
+    // can see this feedback signal on its next turn.
+    try {
+      const history = await loadAgentHistory();
+      const updated = history.map((m, i) =>
+        m.role === "assistant" && i === messageIndex - 1
+          ? { ...m, undone: true, undoneAt: new Date().toISOString() }
+          : m
+      );
+      const ts = await saveAgentHistory(updated);
+      if (ts) syncTimestamps.current[AGENT_HISTORY_KEY] = ts;
+      setAgentRefreshKey(k => k + 1);
+    } catch (e) {
+      console.error("Failed to tag undone message:", e);
+    }
   }, [persist]);
 
   const getUndoableMessages = useCallback(() => {
@@ -699,12 +584,14 @@ export default function App() {
     ]);
     const userMsg = { role: "user", content: input };
     const newMessages = [...freshHistory, userMsg];
-    const recentHistory = newMessages.slice(-20).map(m => ({
-      role: m.role === "user" ? "user" : "assistant",
-      content: m.role === "user" ? m.content : (m.rawJson || m.content),
-    }));
     const modelKey = localStorage.getItem("workplan-agent-model") || "sonnet";
-    const { parsed, rawJson, usage } = await callAgent(recentHistory, freshData, freshCtx, newMessages.length, modelKey);
+    const { parsed, rawJson, usage } = await callAgent(
+      newMessages.slice(-20),
+      freshData,
+      freshCtx,
+      newMessages.length,
+      modelKey,
+    );
     if (parsed.actions && parsed.actions.length > 0) {
       handleAgentActions(parsed.actions, newMessages.length);
     }
@@ -743,7 +630,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0D0D0F", color: "#E5E5EA", fontFamily: "'DM Sans', sans-serif" }}>
-      <Header data={effectiveData} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onExport={handleExport} onReset={handleReset} viewingArchive={viewingArchive} archiveIndex={archiveIndex} onNavigateWeek={handleNavigateWeek} onJumpToWeek={handleJumpToWeek} offline={offline} />
+      <Header data={effectiveData} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onExport={handleExport} onReset={handleReset} viewingArchive={viewingArchive} archiveIndex={archiveIndex} onNavigateWeek={handleNavigateWeek} onJumpToWeek={handleJumpToWeek} offline={offline} onClearNowPin={!readOnly ? handleClearNowPin : undefined} />
 
       <div style={{ padding: mobile ? "16px" : "24px 32px", maxWidth: "960px" }}>
         {view === "today" && !viewingArchive && (
@@ -761,6 +648,10 @@ export default function App() {
             onAddSubtask={handleAddSubtask}
             onDeleteSubtask={handleDeleteSubtask}
             onTriageSubmit={handleTriageSubmit}
+            onSetNowPin={handleSetNowPin}
+            onClearNowPin={handleClearNowPin}
+            onAcceptTomorrowDraft={handleAcceptTomorrowDraft}
+            onDismissTomorrowDraft={handleDismissTomorrowDraft}
           />
         )}
         {view === "tasks" && (
@@ -788,6 +679,9 @@ export default function App() {
               <QuickNotes notes={effectiveData.notes} readOnly={readOnly} onAdd={handleAddNote} onDelete={handleDeleteNote} />
             </div>
           </>
+        )}
+        {view === "retro" && !viewingArchive && (
+          <WeeklyRetro data={effectiveData} onTriageSubmit={handleTriageSubmit} />
         )}
         {view === "context" && (
           <ContextEditor contextDoc={contextDoc} onSave={handleContextSave} />

@@ -105,9 +105,9 @@ export default function WeekShape({ weekShape, workstreams, readOnly, onUpdateDa
         }}>+ Add day</button>
       )}
 
-      {/* Daily Logs for this week */}
+      {/* Daily activity (richer than just a log preview — shows the day's
+           priority queue with final statuses, plus the log narrative) */}
       {dailyLogs && (() => {
-        // Compute this week's Mon-Sun date range
         const now = new Date();
         const dayOfWeek = now.getDay();
         const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
@@ -125,16 +125,36 @@ export default function WeekShape({ weekShape, workstreams, readOnly, onUpdateDa
 
         if (weekEntries.length === 0) return null;
 
+        // Resolve task ids → live task data (or fall back to snapshots)
+        const allTasks = (workstreams || []).flatMap(ws => ws.tasks.map(t => ({ ...t, wsColor: ws.color })));
+        const liveById = Object.fromEntries(allTasks.map(t => [t.id, t]));
+
         const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         return (
           <div style={{ marginTop: "16px" }}>
-            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "1px" }}>
-              Daily Logs
+            <div style={{
+              fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73",
+              marginBottom: "10px", textTransform: "uppercase", letterSpacing: "1px",
+            }}>
+              Daily Activity
             </div>
             {weekEntries.map(entry => {
               const d = new Date(entry.date + "T12:00:00");
               const label = `${dayLabels[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()}`;
               const isExpanded = expandedLogs[entry.date];
+              const ids = entry.taskIds || [];
+              const statuses = entry.taskStatusSnap || {};
+              const titles = entry.taskTitleSnap || {};
+
+              // Day-level outcome stats (from snapshot — falls back to live status)
+              let dayDone = 0, dayActive = 0, dayWaiting = 0;
+              for (const id of ids) {
+                const s = statuses[id] || liveById[id]?.status || "NOT STARTED";
+                if (s === "DONE") dayDone++;
+                else if (s === "IN PROGRESS") dayActive++;
+                else if (s === "WAITING") dayWaiting++;
+              }
+
               return (
                 <div key={entry.date} style={{
                   background: "#1C1C1E", borderRadius: "8px", marginBottom: "6px",
@@ -144,7 +164,7 @@ export default function WeekShape({ weekShape, workstreams, readOnly, onUpdateDa
                     onClick={() => setExpandedLogs(prev => ({ ...prev, [entry.date]: !prev[entry.date] }))}
                     style={{
                       display: "flex", alignItems: "center", gap: "10px",
-                      padding: "8px 12px", cursor: "pointer",
+                      padding: "10px 12px", cursor: "pointer", flexWrap: "wrap",
                     }}
                   >
                     <span style={{
@@ -154,33 +174,95 @@ export default function WeekShape({ weekShape, workstreams, readOnly, onUpdateDa
                     }}>▶</span>
                     <span style={{
                       fontFamily: "'Space Mono', monospace", fontSize: "11px",
-                      color: "#E5E5EA", fontWeight: 600,
+                      color: "#E5E5EA", fontWeight: 600, minWidth: "56px",
                     }}>{label}</span>
                     {entry.userNote && (
                       <span style={{
                         fontSize: "11px", color: "#E8A838", fontStyle: "italic",
-                        fontFamily: "'DM Sans', sans-serif", flex: 1,
+                        fontFamily: "'DM Sans', sans-serif", flex: 1, minWidth: "120px",
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      }}>{entry.userNote}</span>
+                      }}>"{entry.userNote}"</span>
                     )}
-                    <span style={{
-                      fontFamily: "'JetBrains Mono', monospace", fontSize: "10px",
-                      color: "#4A4A4E",
-                    }}>{entry.taskIds?.length || 0} tasks</span>
-                  </div>
-                  {isExpanded && (
-                    <div style={{ padding: "0 12px 10px 32px" }}>
-                      {entry.log ? (
-                        entry.log.split("\n").map((line, i) => (
-                          <p key={i} style={{
-                            margin: i === 0 ? 0 : "4px 0 0 0", fontSize: "12px",
-                            color: "#C5C5CA", lineHeight: 1.5,
-                            fontFamily: "'DM Sans', sans-serif",
-                          }}>{line || "\u00A0"}</p>
-                        ))
-                      ) : (
-                        <span style={{ fontSize: "11px", color: "#3A3A3E", fontStyle: "italic" }}>No log entry</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                      {dayDone > 0 && (
+                        <span style={{ fontSize: "10px", color: "#5B8DEF", fontFamily: "'JetBrains Mono', monospace" }}>
+                          ✓ {dayDone}
+                        </span>
                       )}
+                      {dayActive > 0 && (
+                        <span style={{ fontSize: "10px", color: "#6CC4A1", fontFamily: "'JetBrains Mono', monospace" }}>
+                          ◇ {dayActive}
+                        </span>
+                      )}
+                      {dayWaiting > 0 && (
+                        <span style={{ fontSize: "10px", color: "#E8A838", fontFamily: "'JetBrains Mono', monospace" }}>
+                          ⏸ {dayWaiting}
+                        </span>
+                      )}
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace", fontSize: "10px", color: "#4A4A4E",
+                      }}>{ids.length || 0} planned</span>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div style={{ padding: "0 14px 12px 32px" }}>
+                      {/* Priority list with status icons */}
+                      {ids.length > 0 && (
+                        <div style={{ marginBottom: entry.log ? "10px" : 0 }}>
+                          {ids.map((id, i) => {
+                            const st = statuses[id] || liveById[id]?.status || "NOT STARTED";
+                            const title = liveById[id]?.title || titles[id] || `(deleted task ${id})`;
+                            const wsColor = liveById[id]?.wsColor || "#4A4A4E";
+                            const icon = st === "DONE" ? "✓" : st === "IN PROGRESS" ? "◇" : st === "WAITING" ? "⏸" : "○";
+                            const iconColor = st === "DONE" ? "#5B8DEF" : st === "IN PROGRESS" ? "#6CC4A1" : st === "WAITING" ? "#E8A838" : "#6E6E73";
+                            return (
+                              <div key={id} style={{
+                                display: "flex", alignItems: "center", gap: "8px",
+                                padding: "3px 0", fontSize: "11px",
+                              }}>
+                                <span style={{
+                                  fontFamily: "'JetBrains Mono', monospace", fontSize: "9px",
+                                  color: "#3A3A3E", minWidth: "14px",
+                                }}>{i + 1}</span>
+                                <span style={{ color: iconColor, fontSize: "11px", minWidth: "12px" }}>{icon}</span>
+                                <span style={{ width: "3px", height: "12px", background: wsColor, borderRadius: "1px" }} />
+                                <span style={{
+                                  fontFamily: "'JetBrains Mono', monospace", fontSize: "10px",
+                                  color: "#8E8E93", fontWeight: 600, minWidth: "44px",
+                                }}>{id}</span>
+                                <span style={{
+                                  fontSize: "11px",
+                                  color: st === "DONE" ? "#6E6E73" : "#C5C5CA",
+                                  textDecoration: st === "DONE" ? "line-through" : "none",
+                                  fontFamily: "'DM Sans', sans-serif", flex: 1,
+                                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                                }}>{title}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Log narrative */}
+                      {entry.log ? (
+                        <div style={{
+                          background: "#0D0D0F", borderRadius: "6px", padding: "8px 10px",
+                          borderLeft: "2px solid #2A2A2E",
+                        }}>
+                          {entry.log.split("\n").map((line, i) => (
+                            <p key={i} style={{
+                              margin: i === 0 ? 0 : "4px 0 0 0", fontSize: "11px",
+                              color: "#C5C5CA", lineHeight: 1.5,
+                              fontFamily: "'DM Sans', sans-serif",
+                            }}>{line || "\u00A0"}</p>
+                          ))}
+                        </div>
+                      ) : ids.length === 0 ? (
+                        <span style={{ fontSize: "11px", color: "#3A3A3E", fontStyle: "italic" }}>
+                          No activity recorded
+                        </span>
+                      ) : null}
                     </div>
                   )}
                 </div>

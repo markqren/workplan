@@ -1,10 +1,23 @@
 # ⬡ WORKPLAN — Roadmap & Feature Tracker
 
-**Last updated:** Apr 7, 2026 | Stack: Vite + React + Supabase + Netlify Functions
+**Last updated:** Apr 26, 2026 | Stack: Vite + React + Supabase + Netlify Functions
 
 ---
 
 ## Releases
+
+### v0.7.0 — Apr 26, 2026 — Agent Intelligence + Today/Week Redesign
+- **Bidirectional task-status normalization** (FIX-02) — Adding a subtask to a DONE task or unchecking the only-done subtask now flips parent → IN PROGRESS automatically. Centralized in `normalizeTaskStatus()` and applied to every mutation path so manual edits and agent actions stay consistent.
+- **Pure mutation library** (INF-07) — All tracker state changes go through `src/lib/mutations.js`. Manual UI handlers and the agent's `applyAgentAction` dispatcher share one implementation. ~230 lines of duplicated logic in `App.jsx` collapsed into a thin shim.
+- **Agent on Anthropic tool-use API** (FEA-30) — Replaced post-hoc JSON parsing with Claude's tool-use API. 22 typed tool schemas validated server-side. Anthropic API errors surface as `⚠`-prefixed assistant messages instead of empty responses.
+- **Pre-digested state + feedback signals** (FEA-31) — System prompt no longer dumps full tracker JSON. Compact digest (active tasks only, today plan resolved to titles, recent daily logs) plus a "feedback signals" block: undone-action telemetry, plan rollovers, long-WAITING tasks, stalled subtask progress. Undo now tags the assistant message with `undone: true` so the agent sees what you rolled back next turn.
+- **Sectioned context doc** (FEA-32) — Default briefing reorganized into named sections (`## People`, `## Project: Segmentation`, `## Working Style`, `## Preferences`, `## Recent Decisions`). New `update_context_section` tool appends to (or creates) named sections instead of dumping a growing list of dated notes.
+- **Morning auto-triage** (FEA-33) — On first Today-view mount each day with no plan yet, the agent automatically generates and applies a priority list. Fires once per day; banner indicator while generating; flag persisted in `todayPlan.autoTriaged` to survive crashes.
+- **Today view redesign** (FEA-34) — (A) Card-callout focus block tinted with the workstream color of the pinned/top task. (B) Day rail at the top with click-to-scrub history mode (read-only view of any past day's plan, focus, log, priority queue, with snapshots reconstructing deleted tasks). Stat tiles: done/total, in-progress, overdue subs, due-soon. Stalled-task nudges with one-tap "ask agent →" prompts. Condensed priority queue rows (id, type icon, title, mini progress bar, urgency badge, status pill) that expand inline to full TaskRow.
+- **Now-pin** (FEA-35) — `nowPinTaskId` tracks the single task you're actively working on. Surfaces as a slim global indicator in the Header across all views. Tap a priority-queue badge to pin; agent can `set_now_pin` / `clear_now_pin`.
+- **Weekly Retro tab** (FEA-13) — New "Retro" top-level tab. Agent-generated structured retros: summary, wins, carryover, decisions, next-week focus. Per-week chips. Sunday/Monday CTA banner. One-shot Sunday auto-trigger drafts last week's retro in the background per session.
+- **End-of-day flow + tomorrow draft** (FEA-36) — End-of-day button asks the agent to write today's log AND draft tomorrow's priorities (without applying via `draft_tomorrow_plan`). Next-morning landing shows an "agent-drafted plan" banner with accept / dismiss controls.
+- **Richer daily activity in Week tab** (FEA-37) — Daily log section shows per-task completion icons (✓◇⏸○), workstream-color accents, and a per-day status breakdown. Snapshots `taskStatusSnap` / `taskTitleSnap` on daily reset so deleted tasks remain visible in history.
 
 ### v0.6.1 — Apr 7, 2026
 - **Priority queue formatting** (FEA-26) — Numbered priority badges with workstream accent color, left color bar per task for visual grouping, separator lines between tasks for better readability.
@@ -59,9 +72,11 @@
 
 | ID | Item | Type | Priority | Details |
 |----|------|------|----------|---------|
+| FEA-12 | **Calendar Awareness (Google Calendar)** | Feature | **High** | Integrate with Google Calendar so the agent knows about upcoming meetings and can fold them into prioritization and prep. **Recommended approach (≈half-day):** add Google as a Supabase Auth OAuth provider with scope `calendar.events.readonly`. Supabase handles the auth-code exchange, token refresh, and storage; on the client, `supabase.auth.getSession()` returns a `provider_token` that hits the Calendar API directly. **Standalone alternative (≈1.5 days):** own the OAuth flow via a Netlify function for client-secret-protected token exchange + a Supabase row to persist refresh tokens. **Surfacing:** (1) Stat tile on Today view: "next meeting in 2h" with attendee names. (2) Pre-meeting prep nudges: "Prep for May 1:1 in 30m → review SEG-3 status?". (3) Digest block in agent system prompt: today's remaining meetings + any meeting-related tasks (matched by stakeholder name in title). (4) `set_today_plan` becomes calendar-aware — agent picks tasks that fit between meetings rather than 8 deep-work items on a meeting-heavy day. (5) Optional: detect meeting cancellations and prompt "you got an hour back — bump SEG-4 up?". |
 | FEA-09 | **Authentication** | Feature | **High** | Add Supabase Auth login gate with email/password. Login screen hides all app content until authenticated. Session persists via Supabase JS client (`onAuthStateChange`). Sign-out button in Header. Update `storage.js` to use session JWT for authenticated Supabase requests. Update RLS policy on `kv_store` to restrict access to authenticated users only (replace the open "Allow all access" policy). Update `claude-proxy.js` to validate the Supabase JWT before proxying to Claude API — reject unauthenticated requests. No signup form needed (single user — create account manually in Supabase dashboard). Prevents unauthorized access to tracker data and agent when deployed publicly. |
 | FEA-10 | **Agent Image Import** | Feature | **High** | Add image upload/paste support to the Agent Panel so Mark can share screenshots (Slack messages, charts, data tables, emails) and have the agent interpret them. Implementation: (1) Add a 📎 button next to the send button in AgentPanel input area. Clicking opens a file picker filtered to images (png, jpg, gif, webp). (2) Support clipboard paste — detect `paste` event on the input field, extract image data from `clipboardData.items`. (3) Convert uploaded/pasted images to base64 data URLs. Show a small thumbnail preview above the input before sending. (4) When sending a message with an image, format the Claude API message content as an array with both `image` and `text` blocks per Claude's vision API format: `[{ type: "image", source: { type: "base64", media_type, data } }, { type: "text", text: "user message" }]`. (5) Update `claude-proxy.js` to pass through the multimodal content format. (6) In chat history, render sent images as small inline thumbnails in the user message bubble. (7) Don't persist base64 image data in agent history (too large) — store a placeholder like "[image attached]" in the saved history. |
 | FEA-23 | **Context Export for Claude.ai** | Feature | **High** | "Copy Work Context" button (in Header or as a new view) that generates a structured markdown snapshot of the full workplan state, optimized for pasting into Claude.ai as conversation context. Includes: (1) **Progress summary** — overall stats (done/active/waiting/not started counts), per-workstream breakdown. (2) **All tasks with current status** — grouped by workstream, with subtask checklists, stakeholders, and linked documents. (3) **Week shape** — current week's day-by-day plan and focus areas. (4) **Recent agent conversations** — last N messages from agent chat history, so Claude.ai can see what's been discussed and decided. (5) **Quick notes** — recent notes with timestamps. (6) **Context document** — the full agent briefing (role, team, projects). Output is a single markdown document designed to fit within Claude.ai's context window. One-click copy to clipboard. Option to include/exclude sections via checkboxes before copying (e.g., skip agent history if too long). Timestamp header so Claude.ai knows how fresh the data is. This lets Mark start a Claude.ai conversation with full work context without manually summarizing. |
+| FEA-38 | **Per-pattern Agent Learning** | Feature | Medium | Layer on top of `update_context_section` and the feedback-signals pipeline shipped in v0.7.0. Detect recurring patterns from undone actions, accepted/rejected tomorrow drafts, and stalled-nudge engagement, then have the agent proactively codify them as durable preferences. Examples: "Mark prefers ≤3 tasks on Fridays" (detected from accepted vs. rejected Friday drafts), "Mark always defers SQL deep work to mornings" (detected from end-of-day rollover patterns), "Mark wants meeting prep tasks added the day before, not day-of" (detected from when meeting-prep tasks first appear in plans vs. when meetings happen). Agent writes these to a new `## Behavioral Preferences` section. Heuristic: only persist after a pattern is observed N≥3 times with consistent direction. |
 
 ---
 
@@ -70,16 +85,25 @@
 | ID | Item | Type | Priority | Details |
 |----|------|------|----------|---------|
 | FEA-11 | **Slack Integration** | Feature | Low | Let the agent draft Slack messages. Could be a new action type `draft_slack` that renders a copyable message in the agent panel, or a direct Slack webhook integration for posting to specific channels. |
-| FEA-12 | **Calendar Awareness** | Feature | Low | Integrate with Google Calendar API so the agent knows about upcoming meetings. Can inform prioritization ("you have a meeting with May in 2 hours, focus on SEG-4") and suggest pre-meeting prep tasks. |
-| FEA-13 | **Weekly Retro** | Feature | Low | Agent generates an end-of-week plan-vs-actual summary: what was planned in the week shape vs what actually got done. Highlights wins, carryover items, and suggested focus for next week. Could auto-generate on Friday or on demand. |
 
 ---
 
 <details>
-<summary><strong>Completed</strong> (29 items)</summary>
+<summary><strong>Completed</strong> (40 items)</summary>
 
 | ID | Item | Type | Completed |
 |----|------|------|-----------|
+| FIX-02 | **Bidirectional Task-Status Normalization** — Adding a subtask to DONE or unchecking the only-done subtask now flips parent → IN PROGRESS. Centralized `normalizeTaskStatus()` applied to every mutation. | Fix | Apr 26 |
+| INF-07 | **Pure Mutation Library** — All tracker mutations consolidated in `src/lib/mutations.js`. Manual handlers and agent dispatcher share one implementation. | Infra | Apr 26 |
+| FEA-30 | **Agent on Tool-Use API** — Replaced JSON-parsing with Anthropic's tool-use API. 22 typed tool schemas, server-side validation, visible API errors. | Feature | Apr 26 |
+| FEA-31 | **Pre-digested State + Feedback Signals** — System prompt sends a compact digest instead of full tracker JSON, plus a feedback-signals block (undone actions, plan rollovers, long-WAITING tasks, stalled subtask progress). Undo tags assistant messages with `undone:true`. | Feature | Apr 26 |
+| FEA-32 | **Sectioned Context Doc** — Default briefing reorganized into named sections. New `update_context_section` agent tool appends to (or creates) named sections. | Feature | Apr 26 |
+| FEA-33 | **Morning Auto-Triage** — On first Today-view mount each day with no plan, agent auto-generates a priority list. One-shot per day via `todayPlan.autoTriaged` flag. | Feature | Apr 26 |
+| FEA-34 | **Today View Redesign** — Card-callout focus, day rail with click-to-scrub history, stat tiles, stalled-task nudges, condensed priority queue with inline expand. | Feature | Apr 26 |
+| FEA-35 | **Now-pin** — `nowPinTaskId` for the active task, surfaced as a Header indicator across all views. Agent can `set_now_pin` / `clear_now_pin`. | Feature | Apr 26 |
+| FEA-13 | **Weekly Retro** — New "Retro" tab. Agent-generated structured retros (summary, wins, carryover, decisions, next-week focus). Sunday/Monday CTA banner + one-shot Sunday auto-trigger. | Feature | Apr 26 |
+| FEA-36 | **End-of-Day + Tomorrow Draft** — End-of-day button writes the log AND drafts tomorrow's plan via `draft_tomorrow_plan` (without applying). Next-morning banner shows accept/dismiss. | Feature | Apr 26 |
+| FEA-37 | **Richer Daily Activity** — Week tab daily logs show per-task completion icons (✓◇⏸○), workstream-color accents, day status breakdown. Snapshots `taskStatusSnap`/`taskTitleSnap` on daily reset. | Feature | Apr 26 |
 | INF-01 | **Local Project Setup** — GitHub repo (`markqren/workplan`), SSH configured, Vite + React scaffolded, Supabase JS client installed, initial commit pushed to `main`. | Infra | Feb 28 |
 | INF-02 | **Code Decomposition** — Decomposed monolithic `work-tracker.jsx` into proper project structure: 8 components (`Header`, `StatsBar`, `TaskRow`, `Workstream`, `WeekShape`, `QuickNotes`, `ContextEditor`, `AgentPanel`), lib files (`constants.js`, `storage.js`, `agent.js`), extracted `default-context.md`, global styles in `styles/index.css`. All functionality preserved. | Infra | Mar 2 |
 | INF-03 | **Supabase Setup** — Created Supabase project, `kv_store` table with auto-updating timestamps and open RLS policy. Created `src/lib/supabase.js` client init. Swapped `storage.js` from localStorage to Supabase — same interface, no component changes. Migration SQL saved in `supabase/migrations/001_create_kv_store.sql`. | Infra | Mar 2 |
@@ -163,20 +187,22 @@ workplan/
 │   │   ├── constants.js            # Storage keys, status config, type labels, default data
 │   │   ├── supabase.js             # Supabase client init
 │   │   ├── storage.js              # KV storage abstraction (get/set/delete)
-│   │   └── agent.js                # System prompt builder + API call logic
+│   │   ├── mutations.js            # Pure tracker-state mutations + agent action dispatcher
+│   │   └── agent.js                # System prompt builder, tool schemas, API call
 │   │
 │   ├── context/
-│   │   └── default-context.md      # Default agent briefing document (seed)
+│   │   └── default-context.md      # Default agent briefing document (seed, sectioned)
 │   │
 │   ├── components/
-│   │   ├── Header.jsx              # Sticky header with nav tabs + filters
+│   │   ├── Header.jsx              # Sticky header, nav tabs, now-pin indicator
 │   │   ├── StatsBar.jsx            # Progress overview (counts + bar)
 │   │   ├── Workstream.jsx          # Collapsible workstream with task list + add form
 │   │   ├── TaskRow.jsx             # Individual task with status cycling, edit/delete
-│   │   ├── WeekShape.jsx           # Weekly planning view (day cards)
+│   │   ├── WeekShape.jsx           # Weekly planning view + rich daily activity cards
 │   │   ├── QuickNotes.jsx          # Inline notes with add/delete
 │   │   ├── ContextEditor.jsx       # Agent briefing document editor
-│   │   ├── TodayView.jsx            # Daily triage + priority queue
+│   │   ├── TodayView.jsx           # Day rail, focus callout, priority queue, end-of-day
+│   │   ├── WeeklyRetro.jsx         # Agent-generated weekly retros + Sunday CTA
 │   │   └── AgentPanel.jsx          # Floating chat panel
 │   │
 │   └── styles/

@@ -9,18 +9,23 @@ function actionLabels(actions) {
     if (a.type === "add_task") return `+ ${a.task?.id || "task"}`;
     if (a.type === "update_task") return `↻ ${a.task_id}`;
     if (a.type === "delete_task") return `− ${a.task_id}`;
+    if (a.type === "add_subtask") return `+ ${a.task_id}/sub`;
+    if (a.type === "toggle_subtask") return `✓ ${a.subtask_id}`;
+    if (a.type === "delete_subtask") return `− ${a.subtask_id}`;
+    if (a.type === "update_subtask") return `↻ ${a.subtask_id}`;
     if (a.type === "add_note") return "📝 note";
     if (a.type === "add_document") return `📎 ${a.document?.label || "doc"}`;
     if (a.type === "delete_document") return `📎− ${a.document_id}`;
     if (a.type === "update_document") return `📎↻ ${a.document_id}`;
-    if (a.type === "update_subtask") return `↻ ${a.subtask_id}`;
     if (a.type === "update_context") return "📌 context";
+    if (a.type === "update_context_section") return `📌 ${a.section || "context"}`;
     if (a.type === "add_workstream") return `+ ws:${a.workstream?.name || "workstream"}`;
     if (a.type === "update_workstream") return `↻ ws:${a.workstream_id}`;
     if (a.type === "delete_workstream") return `− ws:${a.workstream_id}`;
     if (a.type === "reorder_workstreams") return "↕ ws:reorder";
     if (a.type === "set_today_plan") return "📋 today";
-    return null;
+    if (a.type === "set_today_log") return "📓 log";
+    return a.type || null;
   }).filter(Boolean);
 }
 
@@ -128,12 +133,13 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
       const newMessages = [...freshHistory, userMsg];
       setMessages(newMessages);
 
-      const recentHistory = newMessages.slice(-20).map(m => ({
-        role: m.role === "user" ? "user" : "assistant",
-        content: m.role === "user" ? m.content : (m.rawJson || m.content),
-      }));
-
-      const { parsed, rawJson, usage } = await callAgent(recentHistory, freshData, freshCtx, newMessages.length, modelKey);
+      const { parsed, rawJson, usage } = await callAgent(
+        newMessages.slice(-20),
+        freshData,
+        freshCtx,
+        newMessages.length,
+        modelKey,
+      );
 
       if (parsed.actions && parsed.actions.length > 0) {
         onApplyActions(parsed.actions, newMessages.length);

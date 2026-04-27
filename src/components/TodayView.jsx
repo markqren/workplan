@@ -16,6 +16,26 @@ const dayLong = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 
+// Pick the most-urgent open subtask for an at-a-glance subtitle.
+// Order of preference: overdue → due within 2 days → first not-done.
+function nextOpenSubtask(task) {
+  const subs = task?.subtasks || [];
+  if (!subs.length) return null;
+  const open = subs.filter(s => !s.done);
+  if (!open.length) return null;
+  const now = Date.now();
+  const overdue = open.find(s => s.dueDate && new Date(s.dueDate + "T23:59:59").getTime() < now);
+  if (overdue) return overdue;
+  const soon = open.find(s => s.dueDate && new Date(s.dueDate + "T23:59:59").getTime() - now < TWO_DAYS);
+  if (soon) return soon;
+  return open[0];
+}
+
+function fmtSubDue(iso) {
+  const d = new Date(iso + "T12:00:00");
+  return `${monthShort[d.getMonth()]} ${d.getDate()}`;
+}
+
 // Mon..Sat for the calendar week containing `date`
 function weekDates(refDate) {
   const d = new Date(refDate + "T12:00:00");
@@ -260,6 +280,7 @@ function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned,
   const subs = task.subtasks || [];
   const doneSubs = subs.filter(s => s.done).length;
   const subPct = subs.length > 0 ? Math.round((doneSubs / subs.length) * 100) : 0;
+  const activeSub = nextOpenSubtask(task);
 
   // Find soonest urgent subtask due-date
   let urgentBadge = null;
@@ -267,10 +288,10 @@ function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned,
     if (s.done || !s.dueDate) continue;
     const ms = new Date(s.dueDate + "T23:59:59").getTime() - Date.now();
     if (ms < 0) {
-      urgentBadge = { label: `⚠ ${monthShort[new Date(s.dueDate + "T12:00:00").getMonth()]} ${new Date(s.dueDate + "T12:00:00").getDate()}`, color: "#E85B5B" };
+      urgentBadge = { label: `⚠ ${fmtSubDue(s.dueDate)}`, color: "#E85B5B" };
       break;
     } else if (ms < TWO_DAYS && !urgentBadge) {
-      urgentBadge = { label: `⏰ ${monthShort[new Date(s.dueDate + "T12:00:00").getMonth()]} ${new Date(s.dueDate + "T12:00:00").getDate()}`, color: "#E8A838" };
+      urgentBadge = { label: `⏰ ${fmtSubDue(s.dueDate)}`, color: "#E8A838" };
     }
   }
 
@@ -316,15 +337,37 @@ function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned,
         }}>{task.id}</span>
 
         {/* Type icon */}
-        <span style={{ fontSize: "11px", color: "#6E6E73", width: "14px" }}>{TYPE_ICONS[task.type] || "○"}</span>
+        <span style={{ fontSize: "11px", color: "#6E6E73", width: "14px", flexShrink: 0 }}>{TYPE_ICONS[task.type] || "○"}</span>
 
-        {/* Title */}
-        <span style={{
-          fontSize: "13px", color: task.status === "DONE" ? "#6E6E73" : "#E5E5EA",
-          textDecoration: task.status === "DONE" ? "line-through" : "none",
-          fontFamily: "'DM Sans', sans-serif", flex: 1,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: expanded ? "normal" : "nowrap",
-        }}>{task.title}</span>
+        {/* Title + active subtask subtitle */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: "13px", color: task.status === "DONE" ? "#6E6E73" : "#E5E5EA",
+            textDecoration: task.status === "DONE" ? "line-through" : "none",
+            fontFamily: "'DM Sans', sans-serif",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: expanded ? "normal" : "nowrap",
+          }}>{task.title}</div>
+          {!expanded && activeSub && (
+            <div style={{
+              fontSize: "11px", color: "#8E8E93",
+              fontFamily: "'DM Sans', sans-serif",
+              marginTop: "2px", display: "flex", alignItems: "center", gap: "6px",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              <span style={{ color: "#4A4A4E", fontFamily: "'JetBrains Mono', monospace", fontSize: "10px" }}>↳</span>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {activeSub.title}
+              </span>
+              {activeSub.dueDate && (
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace", fontSize: "9px",
+                  color: new Date(activeSub.dueDate + "T23:59:59").getTime() < Date.now() ? "#E85B5B" : "#6E6E73",
+                  flexShrink: 0,
+                }}>· {fmtSubDue(activeSub.dueDate)}</span>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Subtask progress bar */}
         {subs.length > 0 && (
@@ -447,6 +490,7 @@ export default function TodayView({
   const [logSummarizing, setLogSummarizing] = useState(false);
   const [endOfDayLoading, setEndOfDayLoading] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState(null);
+  const [expandedOtherId, setExpandedOtherId] = useState(null);
   const [viewingDate, setViewingDate] = useState(todayIso());
   const inputRef = useRef(null);
 
@@ -1037,33 +1081,109 @@ export default function TodayView({
           </div>
           {otherActive.map(task => {
             const c = STATUS_CONFIG[task.status] || STATUS_CONFIG["NOT STARTED"];
+            const openSubs = (task.subtasks || []).filter(s => !s.done);
+            const isOpen = expandedOtherId === task.id;
+            const activeSub = nextOpenSubtask(task);
             return (
               <div
                 key={task.id}
-                onClick={() => onAddToToday(task.id)}
                 style={{
-                  display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px",
-                  cursor: "pointer", borderRadius: "4px", marginBottom: "2px",
-                  background: "transparent",
+                  borderLeft: `2px solid ${task.wsColor || "#3A3A3E"}`,
+                  background: isOpen ? "#1C1C1E" : "transparent",
+                  borderRadius: "0 6px 6px 0",
+                  marginBottom: "3px",
+                  transition: "background 0.15s",
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = "#1C1C1E"}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
               >
-                <span style={{
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: "10px",
-                  color: "#8E8E93", fontWeight: 600, minWidth: "48px",
-                }}>{task.id}</span>
-                <span style={{
-                  fontSize: "12px", color: "#8E8E93", flex: 1,
-                  fontFamily: "'DM Sans', sans-serif",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>{task.title}</span>
-                <span style={{
-                  fontSize: "9px", fontFamily: "'JetBrains Mono', monospace",
-                  color: c.fg, background: c.bg, border: `1px solid ${c.border}`,
-                  padding: "1px 6px", borderRadius: "3px", flexShrink: 0,
-                }}>{task.status === "NOT STARTED" ? "NS" : task.status === "IN PROGRESS" ? "IP" : task.status === "WAITING" ? "W" : task.status}</span>
-                <span style={{ fontSize: "10px", color: "#3A3A3E" }}>+</span>
+                <div
+                  onClick={() => setExpandedOtherId(isOpen ? null : task.id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "8px", padding: "6px 10px",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={e => { if (!isOpen) e.currentTarget.parentElement.style.background = "#161618"; }}
+                  onMouseLeave={e => { if (!isOpen) e.currentTarget.parentElement.style.background = "transparent"; }}
+                >
+                  <span style={{
+                    color: "#4A4A4E", fontSize: "9px", flexShrink: 0,
+                    transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s",
+                  }}>▶</span>
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace", fontSize: "10px",
+                    color: "#8E8E93", fontWeight: 600, minWidth: "48px", flexShrink: 0,
+                  }}>{task.id}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: "12px", color: "#C5C5CA",
+                      fontFamily: "'DM Sans', sans-serif",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>{task.title}</div>
+                    {!isOpen && activeSub && (
+                      <div style={{
+                        fontSize: "10px", color: "#6E6E73",
+                        fontFamily: "'DM Sans', sans-serif",
+                        marginTop: "1px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>
+                        <span style={{ color: "#3A3A3E", fontFamily: "'JetBrains Mono', monospace" }}>↳ </span>
+                        {activeSub.title}
+                        {openSubs.length > 1 && (
+                          <span style={{ color: "#4A4A4E" }}> · +{openSubs.length - 1}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{
+                    fontSize: "9px", fontFamily: "'JetBrains Mono', monospace",
+                    color: c.fg, background: c.bg, border: `1px solid ${c.border}`,
+                    padding: "1px 6px", borderRadius: "3px", flexShrink: 0,
+                  }}>{task.status === "NOT STARTED" ? "NS" : task.status === "IN PROGRESS" ? "IP" : task.status === "WAITING" ? "W" : task.status}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onAddToToday(task.id); }}
+                    title="Add to today"
+                    style={{
+                      background: "transparent", border: "1px solid #2A2A2E", borderRadius: "4px",
+                      color: "#6CC4A1", fontSize: "10px", padding: "2px 8px",
+                      fontFamily: "'JetBrains Mono', monospace", cursor: "pointer", flexShrink: 0,
+                    }}
+                  >+ today</button>
+                </div>
+                {isOpen && (
+                  <div style={{ padding: "0 12px 10px 28px" }}>
+                    {openSubs.length === 0 ? (
+                      <div style={{
+                        fontSize: "11px", color: "#3A3A3E", fontStyle: "italic",
+                        fontFamily: "'DM Sans', sans-serif", padding: "4px 0",
+                      }}>No outstanding subtasks.</div>
+                    ) : (
+                      openSubs.map(s => {
+                        const overdue = s.dueDate && new Date(s.dueDate + "T23:59:59").getTime() < Date.now();
+                        const dueSoon = !overdue && s.dueDate && new Date(s.dueDate + "T23:59:59").getTime() - Date.now() < TWO_DAYS;
+                        return (
+                          <div key={s.id} style={{
+                            display: "flex", alignItems: "center", gap: "8px",
+                            padding: "3px 0", fontSize: "11px",
+                            fontFamily: "'DM Sans', sans-serif",
+                          }}>
+                            <span style={{
+                              fontFamily: "'JetBrains Mono', monospace", fontSize: "9px",
+                              color: "#6E6E73", minWidth: "44px",
+                            }}>{s.id}</span>
+                            <span style={{ color: "#C5C5CA", flex: 1 }}>{s.title}</span>
+                            {s.dueDate && (
+                              <span style={{
+                                fontFamily: "'JetBrains Mono', monospace", fontSize: "9px",
+                                color: overdue ? "#E85B5B" : dueSoon ? "#E8A838" : "#6E6E73",
+                                flexShrink: 0,
+                              }}>
+                                {overdue ? "⚠ " : dueSoon ? "⏰ " : ""}{fmtSubDue(s.dueDate)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

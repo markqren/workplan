@@ -189,6 +189,251 @@ export function clearNowPin(data) {
   return { ...data, nowPinTaskId: null };
 }
 
+// ── Morning intake ─────────────────────────────────────────────────
+//
+// Conversational morning planning. Agent gathers context across a
+// few exchanges, then calls propose_morning_plan ONCE; we stash the
+// proposals here for per-item review. Each proposal is editable and
+// has its own accept/skip decision.
+
+// Take the raw input from the agent's `propose_morning_plan` tool
+// call and expand into individual proposal cards with stable ids.
+export function expandMorningProposals(toolInput) {
+  const out = [];
+  let counter = 0;
+  const nextId = () => `p${++counter}`;
+
+  if (toolInput.focus_note) {
+    out.push({
+      id: nextId(),
+      kind: "focus_note",
+      payload: { text: toolInput.focus_note },
+      reason: toolInput.summary || "",
+      decision: "pending",
+    });
+  }
+  for (const p of toolInput.priorities || []) {
+    if (!p?.task_id) continue;
+    out.push({
+      id: nextId(),
+      kind: "priority",
+      payload: { task_id: p.task_id, position: out.filter(x => x.kind === "priority").length },
+      reason: p.reason || "",
+      decision: "pending",
+    });
+  }
+  for (const t of toolInput.new_tasks || []) {
+    if (!t?.workstream_id || !t?.title) continue;
+    out.push({
+      id: nextId(),
+      kind: "new_task",
+      payload: {
+        workstream_id: t.workstream_id,
+        id: t.id || "",
+        type: t.type || "--",
+        title: t.title,
+        target: t.target || "",
+        stakeholders: t.stakeholders || [],
+        subtasks: (t.subtasks || []).map(s => ({ title: s.title || "", dueDate: s.dueDate || "" })),
+        add_to_today: t.add_to_today !== false,
+      },
+      reason: t.reason || "",
+      decision: "pending",
+    });
+  }
+  for (const s of toolInput.new_subtasks || []) {
+    if (!s?.task_id || !s?.title) continue;
+    out.push({
+      id: nextId(),
+      kind: "new_subtask",
+      payload: { task_id: s.task_id, title: s.title, dueDate: s.dueDate || "" },
+      reason: s.reason || "",
+      decision: "pending",
+    });
+  }
+  if (toolInput.now_pin_task_id) {
+    out.push({
+      id: nextId(),
+      kind: "now_pin",
+      payload: { task_id: toolInput.now_pin_task_id },
+      reason: "",
+      decision: "pending",
+    });
+  }
+  for (const c of toolInput.context_updates || []) {
+    if (!c?.section || !c?.text) continue;
+    out.push({
+      id: nextId(),
+      kind: "context_update",
+      payload: { section: c.section, text: c.text, mode: "append" },
+      reason: "",
+      decision: "pending",
+    });
+  }
+  return out;
+}
+
+const todayDateStr = () => new Date().toISOString().slice(0, 10);
+
+function getIntake(data, date) {
+  return data.morningIntake?.[date] || null;
+}
+
+function withIntake(data, date, intake) {
+  return {
+    ...data,
+    morningIntake: {
+      ...(data.morningIntake || {}),
+      [date]: intake,
+    },
+  };
+}
+
+export function startMorningIntake(data, date = todayDateStr()) {
+  const existing = getIntake(data, date);
+  if (existing && existing.status !== "skipped") return data;
+  return withIntake(data, date, {
+    status: "active",
+    startedAt: nowIso(),
+    completedAt: null,
+    proposals: [],
+    summary: "",
+  });
+}
+
+export function setMorningProposals(data, date = todayDateStr(), toolInput) {
+  const existing = getIntake(data, date) || {
+    status: "active",
+    startedAt: nowIso(),
+    completedAt: null,
+    proposals: [],
+    summary: "",
+  };
+  // Re-proposing keeps any decisions already made on items the user has
+  // already actioned by replacing only the `pending` proposals.
+  const decided = (existing.proposals || []).filter(p => p.decision !== "pending");
+  const fresh = expandMorningProposals(toolInput || {});
+  return withIntake(data, date, {
+    ...existing,
+    status: "reviewing",
+    summary: toolInput?.summary || existing.summary || "",
+    proposals: [...decided, ...fresh],
+  });
+}
+
+export function updateMorningProposal(data, date, proposalId, payloadUpdates) {
+  const intake = getIntake(data, date);
+  if (!intake) return data;
+  return withIntake(data, date, {
+    ...intake,
+    proposals: intake.proposals.map(p =>
+      p.id === proposalId ? { ...p, payload: { ...p.payload, ...payloadUpdates } } : p
+    ),
+  });
+}
+
+export function decideMorningProposal(data, date, proposalId, decision) {
+  const intake = getIntake(data, date);
+  if (!intake) return data;
+  if (!["accepted", "skipped", "pending"].includes(decision)) return data;
+  return withIntake(data, date, {
+    ...intake,
+    proposals: intake.proposals.map(p =>
+      p.id === proposalId ? { ...p, decision, decidedAt: nowIso() } : p
+    ),
+  });
+}
+
+export function completeMorningIntake(data, date = todayDateStr()) {
+  const intake = getIntake(data, date);
+  if (!intake) return data;
+  return withIntake(data, date, { ...intake, status: "done", completedAt: nowIso() });
+}
+
+export function skipMorningIntake(data, date = todayDateStr()) {
+  const existing = getIntake(data, date);
+  return withIntake(data, date, {
+    ...(existing || { proposals: [], summary: "" }),
+    status: "skipped",
+    skippedAt: nowIso(),
+  });
+}
+
+// Apply a single accepted proposal to the data tree by translating
+// it into the underlying mutation(s). Returns the next data and
+// signals context-doc edits via ctx.onContextUpdate (same pattern as
+// applyAgentAction).
+export function applyMorningProposal(data, proposal, ctx = {}) {
+  const { onContextUpdate } = ctx;
+  if (!proposal || proposal.decision !== "accepted") return data;
+  const p = proposal.payload || {};
+  switch (proposal.kind) {
+    case "focus_note": {
+      const next = { ...(data.todayPlan || {}), date: todayDateStr(), userNote: p.text || "" };
+      return { ...data, todayPlan: next };
+    }
+    case "priority": {
+      if (!p.task_id) return data;
+      return addToToday(data, p.task_id);
+    }
+    case "new_task": {
+      const nextId = p.id || generateNextTaskId(data, p.workstream_id);
+      const task = {
+        id: nextId,
+        type: p.type || "--",
+        title: p.title || "",
+        status: "NOT STARTED",
+        target: p.target || "",
+        ...(p.stakeholders?.length ? { stakeholders: p.stakeholders } : {}),
+        ...((p.subtasks || []).length
+          ? {
+              subtasks: (p.subtasks || []).map((s, i) => ({
+                id: `${nextId}${String.fromCharCode(97 + i)}`,
+                title: s.title || "",
+                done: false,
+                completedAt: null,
+                ...(s.dueDate ? { dueDate: s.dueDate } : {}),
+              })),
+            }
+          : {}),
+      };
+      let next = addTask(data, p.workstream_id, task);
+      if (p.add_to_today) next = addToToday(next, nextId);
+      return next;
+    }
+    case "new_subtask": {
+      if (!p.task_id || !p.title) return data;
+      return addSubtask(data, p.task_id, p.title, { dueDate: p.dueDate });
+    }
+    case "now_pin": {
+      if (!p.task_id) return data;
+      return setNowPin(data, p.task_id);
+    }
+    case "context_update": {
+      if (p.section && p.text && onContextUpdate) {
+        const mode = p.mode === "replace" ? "replace" : "append";
+        onContextUpdate(prev => updateContextSection(prev, p.section, p.text, mode));
+      }
+      return data;
+    }
+    default:
+      return data;
+  }
+}
+
+// Pick the next free task id for a workstream by max(numeric suffix) + 1.
+function generateNextTaskId(data, workstreamId) {
+  const ws = data.workstreams.find(w => w.id === workstreamId);
+  if (!ws) return null;
+  const prefix = ws.prefix;
+  let max = 0;
+  for (const t of ws.tasks) {
+    const m = (t.id || "").match(new RegExp(`^${prefix}-(\\d+)$`));
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `${prefix}-${max + 1}`;
+}
+
 // ── Weekly retros ──────────────────────────────────────────────────
 
 // weekKey is the ISO date of the Monday of that week, e.g. "2026-04-20".
@@ -391,6 +636,10 @@ export function applyAgentAction(data, action, ctx = {}) {
     case "set_weekly_retro":
       if (action.weekKey && action.retro) return setWeeklyRetro(data, action.weekKey, action.retro);
       return data;
+    case "propose_morning_plan":
+      // Stash a structured plan for one-by-one review. Doesn't apply
+      // anything to the tracker — the user accepts each proposal.
+      return setMorningProposals(data, todayStr(), action);
     case "draft_tomorrow_plan":
       // Stash an agent-drafted plan for tomorrow without applying it.
       // The user reviews it from TodayView's end-of-day flow.

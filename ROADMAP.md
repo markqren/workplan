@@ -1,10 +1,19 @@
 # ⬡ WORKPLAN — Roadmap & Feature Tracker
 
-**Last updated:** Apr 26, 2026 | Stack: Vite + React + Supabase + Netlify Functions
+**Last updated:** Apr 27, 2026 | Stack: Vite + React + Supabase + Netlify Functions
 
 ---
 
 ## Releases
+
+### v0.8.0 — Apr 27, 2026 — Conversational Morning Intake
+- **Conversational morning intake** (FEA-39) — Replaces the v0.7.0 silent auto-triage (FEA-33). On first app load each day with no plan yet, the agent auto-opens the chat panel and starts a 1–3 turn conversation grounded in the digest + feedback signals (rolled-over tasks, WAITING items, due-date pressure, yesterday's log) to understand what today should look like. When ready, it calls a single new tool `propose_morning_plan` that surfaces a structured plan in a new "Morning Intake" panel at the top of the Today view.
+  - **Per-action cards with inline editing.** Each proposal (set focus, add to today, create new task, add subtask, set now-pin, save context note) gets its own editable card. You can change the task, edit task fields (workstream, type, title, target, stakeholders, subtasks with due dates), tweak the focus sentence, or rewrite a context note before accepting.
+  - **Per-card accept / skip.** Decide on each item independently. Decisions persist; if you reload, you resume exactly where you left off.
+  - **Iterate flow.** A "↺ discuss further" button reopens the chat so you can push back ("drop SEG-3, add a working session for the deck"); the agent revises and re-proposes. Already-decided items stay decided; new pending items are added to the queue.
+  - **Skip / resume.** "Skip for today" cancels intake without re-prompting until tomorrow. State is preserved across reloads (`morningIntake[date]` keyed in tracker state).
+  - **Mode-aware system prompt.** New `MORNING INTAKE MODE` block instructs the agent to ask one focused question at a time, ground in concrete current context (no laundry lists), and call only `propose_morning_plan` while in this mode.
+  - **Agent panel updates.** Intake mode shows a `☀ INTAKE` badge in the panel header; kickoff trigger message is hidden from chat (user just sees the agent's greeting); empty-state placeholder reflects intake state.
 
 ### v0.7.0 — Apr 26, 2026 — Agent Intelligence + Today/Week Redesign
 - **Bidirectional task-status normalization** (FIX-02) — Adding a subtask to a DONE task or unchecking the only-done subtask now flips parent → IN PROGRESS automatically. Centralized in `normalizeTaskStatus()` and applied to every mutation path so manual edits and agent actions stay consistent.
@@ -12,7 +21,7 @@
 - **Agent on Anthropic tool-use API** (FEA-30) — Replaced post-hoc JSON parsing with Claude's tool-use API. 22 typed tool schemas validated server-side. Anthropic API errors surface as `⚠`-prefixed assistant messages instead of empty responses.
 - **Pre-digested state + feedback signals** (FEA-31) — System prompt no longer dumps full tracker JSON. Compact digest (active tasks only, today plan resolved to titles, recent daily logs) plus a "feedback signals" block: undone-action telemetry, plan rollovers, long-WAITING tasks, stalled subtask progress. Undo now tags the assistant message with `undone: true` so the agent sees what you rolled back next turn.
 - **Sectioned context doc** (FEA-32) — Default briefing reorganized into named sections (`## People`, `## Project: Segmentation`, `## Working Style`, `## Preferences`, `## Recent Decisions`). New `update_context_section` tool appends to (or creates) named sections instead of dumping a growing list of dated notes.
-- **Morning auto-triage** (FEA-33) — On first Today-view mount each day with no plan yet, the agent automatically generates and applies a priority list. Fires once per day; banner indicator while generating; flag persisted in `todayPlan.autoTriaged` to survive crashes.
+- **Morning auto-triage** (FEA-33) — On first Today-view mount each day with no plan yet, the agent automatically generates and applies a priority list. Fires once per day; banner indicator while generating; flag persisted in `todayPlan.autoTriaged` to survive crashes. *(Superseded by FEA-39 conversational intake in v0.8.0.)*
 - **Today view redesign** (FEA-34) — (A) Card-callout focus block tinted with the workstream color of the pinned/top task. (B) Day rail at the top with click-to-scrub history mode (read-only view of any past day's plan, focus, log, priority queue, with snapshots reconstructing deleted tasks). Stat tiles: done/total, in-progress, overdue subs, due-soon. Stalled-task nudges with one-tap "ask agent →" prompts. Condensed priority queue rows (id, type icon, title, mini progress bar, urgency badge, status pill) that expand inline to full TaskRow.
 - **Now-pin** (FEA-35) — `nowPinTaskId` tracks the single task you're actively working on. Surfaces as a slim global indicator in the Header across all views. Tap a priority-queue badge to pin; agent can `set_now_pin` / `clear_now_pin`.
 - **Weekly Retro tab** (FEA-13) — New "Retro" top-level tab. Agent-generated structured retros: summary, wins, carryover, decisions, next-week focus. Per-week chips. Sunday/Monday CTA banner. One-shot Sunday auto-trigger drafts last week's retro in the background per session.
@@ -104,6 +113,7 @@
 | FEA-13 | **Weekly Retro** — New "Retro" tab. Agent-generated structured retros (summary, wins, carryover, decisions, next-week focus). Sunday/Monday CTA banner + one-shot Sunday auto-trigger. | Feature | Apr 26 |
 | FEA-36 | **End-of-Day + Tomorrow Draft** — End-of-day button writes the log AND drafts tomorrow's plan via `draft_tomorrow_plan` (without applying). Next-morning banner shows accept/dismiss. | Feature | Apr 26 |
 | FEA-37 | **Richer Daily Activity** — Week tab daily logs show per-task completion icons (✓◇⏸○), workstream-color accents, day status breakdown. Snapshots `taskStatusSnap`/`taskTitleSnap` on daily reset. | Feature | Apr 26 |
+| FEA-39 | **Conversational Morning Intake** — Replaces the silent FEA-33. Agent auto-opens chat on first morning load and runs a 1–3 turn conversation, then calls `propose_morning_plan` with structured proposals. New Morning Intake panel on Today view shows per-action cards with inline editing, accept/skip per item, "↺ discuss further" iterate, "skip for today", and resume-on-reload. | Feature | Apr 27 |
 | INF-01 | **Local Project Setup** — GitHub repo (`markqren/workplan`), SSH configured, Vite + React scaffolded, Supabase JS client installed, initial commit pushed to `main`. | Infra | Feb 28 |
 | INF-02 | **Code Decomposition** — Decomposed monolithic `work-tracker.jsx` into proper project structure: 8 components (`Header`, `StatsBar`, `TaskRow`, `Workstream`, `WeekShape`, `QuickNotes`, `ContextEditor`, `AgentPanel`), lib files (`constants.js`, `storage.js`, `agent.js`), extracted `default-context.md`, global styles in `styles/index.css`. All functionality preserved. | Infra | Mar 2 |
 | INF-03 | **Supabase Setup** — Created Supabase project, `kv_store` table with auto-updating timestamps and open RLS policy. Created `src/lib/supabase.js` client init. Swapped `storage.js` from localStorage to Supabase — same interface, no component changes. Migration SQL saved in `supabase/migrations/001_create_kv_store.sql`. | Infra | Mar 2 |
@@ -202,8 +212,9 @@ workplan/
 │   │   ├── QuickNotes.jsx          # Inline notes with add/delete
 │   │   ├── ContextEditor.jsx       # Agent briefing document editor
 │   │   ├── TodayView.jsx           # Day rail, focus callout, priority queue, end-of-day
+│   │   ├── MorningIntake.jsx       # Conversational morning planning — proposal cards + inline edit
 │   │   ├── WeeklyRetro.jsx         # Agent-generated weekly retros + Sunday CTA
-│   │   └── AgentPanel.jsx          # Floating chat panel
+│   │   └── AgentPanel.jsx          # Floating chat panel (mode-aware: normal | morning_intake)
 │   │
 │   └── styles/
 │       └── index.css               # Global styles, fonts, animations

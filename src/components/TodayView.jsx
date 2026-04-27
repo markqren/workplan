@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { STATUS_CONFIG, TYPE_ICONS } from "../lib/constants.js";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 import TaskRow from "./TaskRow.jsx";
+import MorningIntake from "./MorningIntake.jsx";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -426,6 +427,13 @@ export default function TodayView({
   onClearNowPin,
   onAcceptTomorrowDraft,
   onDismissTomorrowDraft,
+  onAcceptProposal,
+  onSkipProposal,
+  onEditProposal,
+  onFinishMorningIntake,
+  onSkipMorningIntake,
+  onIterateMorningIntake,
+  onOpenAgent,
 }) {
   const mobile = useIsMobile();
   const [triageInput, setTriageInput] = useState("");
@@ -438,10 +446,8 @@ export default function TodayView({
   const [logInput, setLogInput] = useState(todayPlan.log || "");
   const [logSummarizing, setLogSummarizing] = useState(false);
   const [endOfDayLoading, setEndOfDayLoading] = useState(false);
-  const [autoTriageStatus, setAutoTriageStatus] = useState("idle");
   const [expandedTaskId, setExpandedTaskId] = useState(null);
   const [viewingDate, setViewingDate] = useState(todayIso());
-  const autoTriageFiredRef = useRef(false);
   const inputRef = useRef(null);
 
   const todayDate = todayIso();
@@ -455,21 +461,6 @@ export default function TodayView({
   useEffect(() => {
     setNoteInput(todayPlan.userNote || "");
   }, [todayPlan.userNote]);
-
-  // Morning triage: once per day
-  useEffect(() => {
-    if (autoTriageFiredRef.current) return;
-    if (todayPlan.autoTriaged) return;
-    if ((todayPlan.taskIds || []).length > 0) return;
-    if (!isViewingToday) return;
-    autoTriageFiredRef.current = true;
-    setAutoTriageStatus("running");
-    onUpdateTodayPlan({ autoTriaged: true });
-    onTriageSubmit("Good morning. Generate today's plan: review my active tasks, factor in any rollover patterns and stalled items from the feedback signals, and call set_today_plan with your prioritized list plus a one-line userNote naming today's focus.")
-      .then(() => setAutoTriageStatus("done"))
-      .catch(() => setAutoTriageStatus("done"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // ── Resolve tasks ────────────────────────────────────────────────
   const allTasks = useMemo(
@@ -759,22 +750,19 @@ export default function TodayView({
         />
       )}
 
-      {/* Morning triage banner */}
-      {autoTriageStatus === "running" && isViewingToday && (
-        <div style={{
-          background: "linear-gradient(90deg, #2A2518 0%, #1C1C1E 100%)",
-          border: "1px solid #4A3A18", borderRadius: "8px",
-          padding: "10px 14px", marginBottom: "12px",
-          display: "flex", alignItems: "center", gap: "10px",
-        }}>
-          <span className="agent-thinking" style={{
-            fontSize: "12px", color: "#E8A838",
-            fontFamily: "'JetBrains Mono', monospace",
-          }}>⬡ generating morning plan…</span>
-          <span style={{ fontSize: "11px", color: "#6E6E73", fontFamily: "'DM Sans', sans-serif" }}>
-            Reviewing active tasks, rollovers, stalled items.
-          </span>
-        </div>
+      {/* Morning intake (per-proposal review) */}
+      {isViewingToday && (
+        <MorningIntake
+          intake={data.morningIntake?.[todayDate]}
+          data={data}
+          onAcceptProposal={onAcceptProposal}
+          onSkipProposal={onSkipProposal}
+          onEditProposal={onEditProposal}
+          onFinish={onFinishMorningIntake}
+          onSkipIntake={onSkipMorningIntake}
+          onIterate={onIterateMorningIntake}
+          onOpenAgent={onOpenAgent}
+        />
       )}
 
       {/* Triage input */}

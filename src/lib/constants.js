@@ -100,4 +100,6 @@ export const DEFAULT_DATA = {
     autoTriaged: false,
   },
   dailyLogs: {},
+  morningIntake: {},
+  weeklyRetros: {},
 };

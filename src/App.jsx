@@ -394,6 +394,56 @@ export default function App() {
   const handleSetNowPin = (taskId) => mutate(d => M.setNowPin(d, taskId));
   const handleClearNowPin = () => mutate(d => M.clearNowPin(d));
 
+  // ── Morning intake ──────────────────────────────────────────────
+  const todayDateStr = new Date().toISOString().slice(0, 10);
+  const intakeForToday = data?.morningIntake?.[todayDateStr] || null;
+  const intakeActive = intakeForToday && (intakeForToday.status === "active" || intakeForToday.status === "reviewing");
+  const agentMode = intakeActive ? "morning_intake" : "normal";
+
+  const handleAcceptProposal = useCallback((proposalId) => {
+    const date = new Date().toISOString().slice(0, 10);
+    let nextContext = null;
+    persist(prev => {
+      const intake = prev.morningIntake?.[date];
+      if (!intake) return prev;
+      const proposal = intake.proposals.find(p => p.id === proposalId);
+      if (!proposal) return prev;
+      // Mark accepted then apply
+      const decided = M.decideMorningProposal(prev, date, proposalId, "accepted");
+      const acceptedProposal = decided.morningIntake[date].proposals.find(p => p.id === proposalId);
+      return M.applyMorningProposal(decided, acceptedProposal, {
+        onContextUpdate: (fn) => {
+          nextContext = fn(nextContext != null ? nextContext : contextDocRef.current || "");
+        },
+      });
+    });
+    if (nextContext != null) {
+      setContextDoc(nextContext);
+      contextDocRef.current = nextContext;
+      saveContext(nextContext).then(ts => { if (ts) syncTimestamps.current[CONTEXT_KEY] = ts; });
+    }
+  }, [persist]);
+
+  const handleSkipProposal = useCallback((proposalId) => {
+    const date = new Date().toISOString().slice(0, 10);
+    persist(prev => M.decideMorningProposal(prev, date, proposalId, "skipped"));
+  }, [persist]);
+
+  const handleEditProposal = useCallback((proposalId, payloadUpdates) => {
+    const date = new Date().toISOString().slice(0, 10);
+    persist(prev => M.updateMorningProposal(prev, date, proposalId, payloadUpdates));
+  }, [persist]);
+
+  const handleFinishMorningIntake = useCallback(() => {
+    const date = new Date().toISOString().slice(0, 10);
+    persist(prev => M.completeMorningIntake(prev, date));
+  }, [persist]);
+
+  const handleSkipMorningIntake = useCallback(() => {
+    const date = new Date().toISOString().slice(0, 10);
+    persist(prev => M.skipMorningIntake(prev, date));
+  }, [persist]);
+
   // Accept the agent-drafted tomorrow plan as today's plan (used when the
   // user opens the app the next morning and the previous evening's draft
   // is still sitting there).
@@ -577,20 +627,27 @@ export default function App() {
     return { data: d, contextDoc: c };
   }, []);
 
-  const handleTriageSubmit = async (input) => {
+  const handleTriageSubmit = async (input, opts = {}) => {
+    const { hidden = false, mode } = opts;
     const [freshHistory, { data: freshData, contextDoc: freshCtx }] = await Promise.all([
       loadAgentHistory(),
       getFreshData(),
     ]);
-    const userMsg = { role: "user", content: input };
+    const userMsg = { role: "user", content: input, ...(hidden ? { meta: { hidden: true } } : {}) };
     const newMessages = [...freshHistory, userMsg];
     const modelKey = localStorage.getItem("workplan-agent-model") || "sonnet";
+    // Resolve mode: explicit override, else current intake state
+    const resolvedMode = mode
+      || (freshData?.morningIntake?.[new Date().toISOString().slice(0, 10)]?.status === "active"
+          || freshData?.morningIntake?.[new Date().toISOString().slice(0, 10)]?.status === "reviewing"
+          ? "morning_intake" : "normal");
     const { parsed, rawJson, usage } = await callAgent(
       newMessages.slice(-20),
       freshData,
       freshCtx,
       newMessages.length,
       modelKey,
+      resolvedMode,
     );
     if (parsed.actions && parsed.actions.length > 0) {
       handleAgentActions(parsed.actions, newMessages.length);
@@ -602,6 +659,45 @@ export default function App() {
     setAgentRefreshKey(k => k + 1);
     return parsed.message || "Done.";
   };
+
+  // ── Morning intake kickoff (replaces FEA-33 silent auto-triage) ──
+  // Once per day on first load: if no intake record exists for today
+  // and there's no plan yet, fire a hidden trigger that gets the agent
+  // to open with a contextual greeting and one focused question.
+  const morningKickoffFiredRef = useRef(false);
+  useEffect(() => {
+    if (morningKickoffFiredRef.current) return;
+    if (loading || !data) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const intake = data.morningIntake?.[today];
+    if (intake) {
+      // Already started/skipped/done. If still active or reviewing,
+      // resume by auto-opening the panel.
+      if (intake.status === "active" || intake.status === "reviewing") {
+        morningKickoffFiredRef.current = true;
+        setAgentOpen(true);
+      }
+      return;
+    }
+    // Don't kick off if user already has a plan (e.g. accepted tomorrow draft).
+    if ((data.todayPlan?.taskIds || []).length > 0) return;
+    // Don't kick off in archive view
+    if (viewingArchive) return;
+
+    morningKickoffFiredRef.current = true;
+    persist(prev => M.startMorningIntake(prev, today));
+    setAgentOpen(true);
+
+    const dayName = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date().getDay()];
+    const kickoffPrompt =
+      `[System: morning intake] It's ${dayName} ${today}. Open morning intake with Mark. ` +
+      `Use the digest and feedback signals to ground your greeting in concrete current context (rolled-over tasks, ` +
+      `WAITING items, due-date pressure, yesterday's log). Greet briefly, then ask ONE focused question. ` +
+      `Do not list options. Do not call any tools yet — wait until you have enough context to call propose_morning_plan.`;
+    handleTriageSubmit(kickoffPrompt, { hidden: true, mode: "morning_intake" })
+      .catch(err => console.warn("Morning intake kickoff failed:", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, data?.morningIntake, viewingArchive]);
 
   // ── Render ──────────────────────────────────────────────────────
 
@@ -652,6 +748,13 @@ export default function App() {
             onClearNowPin={handleClearNowPin}
             onAcceptTomorrowDraft={handleAcceptTomorrowDraft}
             onDismissTomorrowDraft={handleDismissTomorrowDraft}
+            onAcceptProposal={handleAcceptProposal}
+            onSkipProposal={handleSkipProposal}
+            onEditProposal={handleEditProposal}
+            onFinishMorningIntake={handleFinishMorningIntake}
+            onSkipMorningIntake={handleSkipMorningIntake}
+            onIterateMorningIntake={() => setAgentOpen(true)}
+            onOpenAgent={() => setAgentOpen(true)}
           />
         )}
         {view === "tasks" && (
@@ -688,7 +791,7 @@ export default function App() {
         )}
       </div>
 
-      {!readOnly && <AgentPanel onApplyActions={handleAgentActions} onUndo={handleUndo} getUndoableMessages={getUndoableMessages} isOpen={agentOpen} onToggle={() => setAgentOpen(!agentOpen)} refreshKey={agentRefreshKey} onHistorySaved={handleHistorySaved} getFreshData={getFreshData} />}
+      {!readOnly && <AgentPanel onApplyActions={handleAgentActions} onUndo={handleUndo} getUndoableMessages={getUndoableMessages} isOpen={agentOpen} onToggle={() => setAgentOpen(!agentOpen)} refreshKey={agentRefreshKey} onHistorySaved={handleHistorySaved} getFreshData={getFreshData} agentMode={agentMode} />}
 
       {syncToast && (
         <div style={{

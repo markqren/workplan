@@ -25,6 +25,16 @@ function actionLabels(actions) {
     if (a.type === "reorder_workstreams") return "↕ ws:reorder";
     if (a.type === "set_today_plan") return "📋 today";
     if (a.type === "set_today_log") return "📓 log";
+    if (a.type === "set_now_pin") return `▶ now:${a.task_id || ""}`;
+    if (a.type === "clear_now_pin") return "▶ unpin";
+    if (a.type === "set_weekly_retro") return "✦ retro";
+    if (a.type === "draft_tomorrow_plan") return "📅 tomorrow draft";
+    if (a.type === "propose_morning_plan") {
+      const n = (a.priorities?.length || 0) + (a.new_tasks?.length || 0)
+        + (a.new_subtasks?.length || 0) + (a.context_updates?.length || 0)
+        + (a.now_pin_task_id ? 1 : 0) + (a.focus_note ? 1 : 0);
+      return `☀ intake (${n} items to review)`;
+    }
     return a.type || null;
   }).filter(Boolean);
 }
@@ -47,7 +57,7 @@ function renderAgentMarkdown(text) {
   return html;
 }
 
-export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages, isOpen, onToggle, refreshKey, onHistorySaved, getFreshData }) {
+export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages, isOpen, onToggle, refreshKey, onHistorySaved, getFreshData, agentMode = "normal" }) {
   const mobile = useIsMobile();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
@@ -133,12 +143,18 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
       const newMessages = [...freshHistory, userMsg];
       setMessages(newMessages);
 
+      // Re-resolve mode from freshData (intake state may have flipped)
+      const today = new Date().toISOString().slice(0, 10);
+      const intake = freshData?.morningIntake?.[today];
+      const resolvedMode = (intake?.status === "active" || intake?.status === "reviewing")
+        ? "morning_intake" : agentMode;
       const { parsed, rawJson, usage } = await callAgent(
         newMessages.slice(-20),
         freshData,
         freshCtx,
         newMessages.length,
         modelKey,
+        resolvedMode,
       );
 
       if (parsed.actions && parsed.actions.length > 0) {
@@ -210,7 +226,15 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
       {/* Header */}
       <div style={{ padding: "14px 18px", borderBottom: "1px solid #2A2A2E", display: "flex", alignItems: "center", gap: "10px" }}>
         <span style={{ fontSize: "16px" }}>⬡</span>
-        <span style={{ fontFamily: "'Space Mono', monospace", fontSize: "13px", fontWeight: 700, color: "#E5E5EA", flex: 1 }}>Agent</span>
+        <span style={{ fontFamily: "'Space Mono', monospace", fontSize: "13px", fontWeight: 700, color: "#E5E5EA" }}>Agent</span>
+        {agentMode === "morning_intake" && (
+          <span style={{
+            fontFamily: "'JetBrains Mono', monospace", fontSize: "9px", fontWeight: 700,
+            color: "#E8A838", background: "#2A2518", border: "1px solid #4A3A18",
+            borderRadius: "3px", padding: "2px 6px", textTransform: "uppercase", letterSpacing: "0.5px",
+          }}>☀ intake</span>
+        )}
+        <div style={{ flex: 1 }} />
         {lastUsage && (() => {
           const m = AGENT_MODELS[lastUsage.modelKey] || AGENT_MODELS[modelKey] || AGENT_MODELS.sonnet;
           return (
@@ -239,7 +263,13 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
 
       {/* Messages */}
       <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px", display: "flex", flexDirection: "column", gap: "12px" }}>
-        {messages.length === 0 && (
+        {messages.filter(m => !m.meta?.hidden).length === 0 && agentMode === "morning_intake" && (
+          <div style={{ color: "#8E8E93", fontSize: "13px", fontFamily: "'DM Sans', sans-serif", textAlign: "center", marginTop: "40px", lineHeight: 1.8 }}>
+            <div style={{ fontSize: "28px", marginBottom: "12px", color: "#E8A838" }}>☀</div>
+            <span className="agent-thinking" style={{ color: "#E8A838", fontFamily: "'JetBrains Mono', monospace", fontSize: "11px" }}>preparing your morning greeting…</span>
+          </div>
+        )}
+        {messages.filter(m => !m.meta?.hidden).length === 0 && agentMode !== "morning_intake" && (
           <div style={{ color: "#3A3A3E", fontSize: "12px", fontFamily: "'DM Sans', sans-serif", textAlign: "center", marginTop: "40px", lineHeight: 1.8 }}>
             <div style={{ fontSize: "28px", marginBottom: "12px", opacity: 0.4 }}>⬡</div>
             I know your workstreams, team,<br />and priorities.<br /><br />
@@ -251,7 +281,7 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
             </span>
           </div>
         )}
-        {messages.map((msg, i) => (
+        {messages.map((msg, i) => msg.meta?.hidden ? null : (
           <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
             {msg.role === "user" ? (
               <div style={{

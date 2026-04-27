@@ -307,6 +307,84 @@ export const AGENT_TOOLS = [
     },
   },
   {
+    name: "propose_morning_plan",
+    description:
+      "Propose a complete morning plan for Mark to review one item at a time. " +
+      "Call this EXACTLY ONCE at the end of morning intake when you have enough context. " +
+      "Do NOT call any other mutation tools (add_task, set_today_plan, etc.) while in morning intake mode. " +
+      "Each item Mark sees as a separate card he can edit, accept, or skip. " +
+      "If Mark pushes back after seeing the proposal, gather more context and call this tool AGAIN with a revised plan.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "1-2 sentence narrative of the day's shape" },
+        focus_note: { type: "string", description: "One-line focus sentence for today (optional)" },
+        priorities: {
+          type: "array",
+          description: "Existing tasks to put on today's plan, in order of priority.",
+          items: {
+            type: "object",
+            properties: {
+              task_id: { type: "string" },
+              reason: { type: "string", description: "1-line why this is on today's plan" },
+            },
+            required: ["task_id"],
+          },
+        },
+        new_tasks: {
+          type: "array",
+          description: "Brand-new tasks to create. Mark will edit fields before accepting.",
+          items: {
+            type: "object",
+            properties: {
+              workstream_id: { type: "string" },
+              id: { type: "string", description: "Optional — auto-generated if omitted" },
+              type: { type: "string", enum: ["N", "D", "A", "--"] },
+              title: { type: "string" },
+              target: { type: "string" },
+              stakeholders: { type: "array", items: { type: "string" } },
+              subtasks: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: { title: { type: "string" }, dueDate: { type: "string" } },
+                  required: ["title"],
+                },
+              },
+              add_to_today: { type: "boolean", description: "Default true — also add to today's plan when accepted" },
+              reason: { type: "string" },
+            },
+            required: ["workstream_id", "title"],
+          },
+        },
+        new_subtasks: {
+          type: "array",
+          description: "Subtasks to add to existing tasks.",
+          items: {
+            type: "object",
+            properties: {
+              task_id: { type: "string" },
+              title: { type: "string" },
+              dueDate: { type: "string" },
+              reason: { type: "string" },
+            },
+            required: ["task_id", "title"],
+          },
+        },
+        now_pin_task_id: { type: "string", description: "Optional task to pin as 'now working on'" },
+        context_updates: {
+          type: "array",
+          description: "Durable context worth saving to the briefing doc (people, decisions, preferences).",
+          items: {
+            type: "object",
+            properties: { section: { type: "string" }, text: { type: "string" } },
+            required: ["section", "text"],
+          },
+        },
+      },
+    },
+  },
+  {
     name: "draft_tomorrow_plan",
     description:
       "Draft (but do NOT apply) tomorrow's priority list. Used by the End-of-Day flow. " +
@@ -510,14 +588,30 @@ export function buildFeedbackSignals(data, recentHistory) {
 
 // ── System prompt ──────────────────────────────────────────────────
 
-export const buildSystemPrompt = (data, contextDoc, recentHistory, historyLength) => {
+const MORNING_INTAKE_BLOCK = `## MORNING INTAKE MODE — ACTIVE
+
+You are doing morning intake with Mark. Goal: in 1-3 short exchanges, understand what today should look like.
+
+Rules while in this mode:
+1. DO NOT call any mutation tools (add_task, set_today_plan, set_now_pin, add_subtask, etc.). The ONE tool you may call is \`propose_morning_plan\`.
+2. Be conversational, brief, and focused. Ask follow-up questions ONE AT A TIME, not laundry lists.
+3. Use the digest + feedback signals below to ground your questions — show you've read them. Don't ask about things you already know.
+4. Open with a brief greeting that already references concrete context (e.g. yesterday's blockers, rolled-over tasks, items WAITING on stakeholders, due dates this week). Then ask one focused question.
+5. Examples of good first questions: "Yesterday SEG-3 didn't move — still stuck on the May framing, or has that resolved?" / "Brandye still hasn't responded on SEG-4a — chase today or move on?" / "What's the must-finish item before tomorrow's meeting?"
+6. After you have enough context (typically 1-3 turns), call \`propose_morning_plan\` ONCE with a structured plan. Mark reviews each item individually.
+7. If Mark says "redo", "iterate", or pushes back after seeing the proposal, ask one clarifying question, then call \`propose_morning_plan\` AGAIN with a revised plan. Don't call other tools.
+8. Keep proposals concrete and grounded in the digest — use real task ids, real workstream ids.
+`;
+
+export const buildSystemPrompt = (data, contextDoc, recentHistory, historyLength, mode = "normal") => {
   const digest = digestTrackerState(data);
   const signals = buildFeedbackSignals(data, recentHistory);
   const longConvWarning = historyLength >= 24
     ? `\n\n## LONG CONVERSATION\nThis chat has ${historyLength} messages. If durable context has surfaced that isn't in the briefing yet, save it now via update_context_section before it's lost.`
     : "";
+  const modeBlock = mode === "morning_intake" ? `\n${MORNING_INTAKE_BLOCK}\n` : "";
 
-  return `You are Mark's embedded work-tracker agent — a daily-driver for task management AND a strategic thought partner. You have deep context about his role, team, and current priorities.
+  return `You are Mark's embedded work-tracker agent — a daily-driver for task management AND a strategic thought partner. You have deep context about his role, team, and current priorities.${modeBlock}
 
 ## TOP-LEVEL RULES (in order)
 1. Be concise and direct. Mark values clarity over verbosity.
@@ -543,7 +637,7 @@ ${digest}
 ${signals}
 
 ## TRIAGE BEHAVIOR
-- "What should I work on today?" / "triage" → call set_today_plan with an ordered list of task ids and a one-line userNote naming the focus. Pick 3–7 tasks; weigh due dates, meeting prep, dependencies, and rollover patterns from signals.
+- Morning planning is handled by Morning Intake (conversational, in-app review of proposals). When intake is active you're in MORNING INTAKE MODE; otherwise treat any explicit "triage" / "what should I work on today?" as a direct request and call set_today_plan with an ordered list of task ids and a one-line userNote naming the focus (3–7 tasks; weigh due dates, meeting prep, dependencies, rollover patterns).
 - "Today I just need to finish X" → set_today_plan with just those tasks.
 - "Summarize my day" / "wrap up" → call set_today_log with completed work, progress, blockers.
 - "End of day" / "draft tomorrow" → call set_today_log AND draft_tomorrow_plan (don't apply set_today_plan — Mark reviews the draft first).
@@ -588,7 +682,7 @@ function sanitizeHistory(messages) {
   }).filter(m => (m.content || "").trim().length > 0);
 }
 
-export async function callAgent(history, data, contextDoc, historyLength, modelKey = "sonnet") {
+export async function callAgent(history, data, contextDoc, historyLength, modelKey = "sonnet", mode = "normal") {
   const model = AGENT_MODELS[modelKey]?.id || AGENT_MODELS.sonnet.id;
   const sanitized = sanitizeHistory(history);
 
@@ -598,7 +692,7 @@ export async function callAgent(history, data, contextDoc, historyLength, modelK
     body: JSON.stringify({
       model,
       max_tokens: 1500,
-      system: buildSystemPrompt(data, contextDoc, history, historyLength),
+      system: buildSystemPrompt(data, contextDoc, history, historyLength, mode),
       tools: AGENT_TOOLS,
       messages: sanitized,
     }),

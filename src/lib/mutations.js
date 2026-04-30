@@ -74,7 +74,9 @@ export function deleteTask(data, taskId) {
 // ── Subtasks ───────────────────────────────────────────────────────
 
 export function addSubtask(data, taskId, title, opts = {}) {
-  return mapTask(data, taskId, t => {
+  let foundParent = false;
+  const next = mapTask(data, taskId, t => {
+    foundParent = true;
     const existing = t.subtasks || [];
     const suffix = String.fromCharCode(97 + existing.length);
     const newSub = {
@@ -86,6 +88,10 @@ export function addSubtask(data, taskId, title, opts = {}) {
     };
     return { ...t, subtasks: [...existing, newSub] };
   });
+  if (!foundParent && typeof console !== "undefined") {
+    console.warn(`[workplan] addSubtask: parent task '${taskId}' not found — subtask '${title}' was dropped`);
+  }
+  return next;
 }
 
 // opts.effectiveDate (YYYY-MM-DD) backdates the completedAt timestamp

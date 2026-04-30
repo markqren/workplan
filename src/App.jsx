@@ -72,6 +72,12 @@ export default function App() {
   const syncTimestamps = useRef({});
   const undoBuffer = useRef([]);
   const undoEpoch = useRef(0);
+  // Tracks in-flight saveData() promises so getFreshData() can await them
+  // before reading from Supabase. Without this, a race between an async
+  // save and a subsequent reload would clobber optimistic state with the
+  // pre-save remote snapshot (manifested as "agent added subtask but it
+  // disappeared after my next message").
+  const pendingSaves = useRef([]);
   const mobile = useIsMobile();
 
   // ── Online/offline detection ─────────────────────────────────────
@@ -191,32 +197,48 @@ export default function App() {
   // Accepts a mutation function: (currentData) => newData
   // Optimistic update first, then checks for remote conflicts.
   const persist = useCallback(async (mutate) => {
+    const startedAt = Date.now();
     const optimistic = mutate(dataRef.current);
     dataRef.current = optimistic;
     setData(optimistic);
 
-    try {
-      const remoteTs = await getTimestamp(STORAGE_KEY);
-      const localTs = syncTimestamps.current[STORAGE_KEY];
-      const isStale = remoteTs && (!localTs || new Date(remoteTs) > new Date(localTs));
+    // Wrap the async save in a tracked promise so getFreshData() can
+    // wait for it before reloading from Supabase.
+    const savePromise = (async () => {
+      try {
+        const remoteTs = await getTimestamp(STORAGE_KEY);
+        const localTs = syncTimestamps.current[STORAGE_KEY];
+        const isStale = remoteTs && (!localTs || new Date(remoteTs) > new Date(localTs));
 
-      if (isStale) {
-        const fresh = await loadData() || DEFAULT_DATA;
-        const merged = mutate(fresh);
-        dataRef.current = merged;
-        setData(merged);
-        setSyncToast(true);
-        const ts = await saveData(merged);
-        if (ts) syncTimestamps.current[STORAGE_KEY] = ts;
-      } else {
+        if (isStale) {
+          const fresh = await loadData() || DEFAULT_DATA;
+          const merged = mutate(fresh);
+          dataRef.current = merged;
+          setData(merged);
+          setSyncToast(true);
+          const ts = await saveData(merged);
+          if (ts) syncTimestamps.current[STORAGE_KEY] = ts;
+        } else {
+          const ts = await saveData(optimistic);
+          if (ts) syncTimestamps.current[STORAGE_KEY] = ts;
+        }
+      } catch (e) {
+        console.error("[workplan] Sync-before-write failed:", e);
         const ts = await saveData(optimistic);
         if (ts) syncTimestamps.current[STORAGE_KEY] = ts;
       }
-    } catch (e) {
-      console.error("Sync-before-write failed:", e);
-      const ts = await saveData(optimistic);
-      if (ts) syncTimestamps.current[STORAGE_KEY] = ts;
-    }
+    })();
+
+    pendingSaves.current.push(savePromise);
+    savePromise.finally(() => {
+      pendingSaves.current = pendingSaves.current.filter(p => p !== savePromise);
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > 1500) {
+        console.warn(`[workplan] persist save took ${elapsed}ms — slow saves increase race-window risk`);
+      }
+    });
+
+    return savePromise;
   }, []);
 
   // ── Background refresh (focus / visibility) ─────────────────────
@@ -618,6 +640,20 @@ export default function App() {
   // Pull fresh data + context from Supabase for the agent API call.
   // Updates local state and sync timestamps as a side-effect.
   const getFreshData = useCallback(async () => {
+    // Wait for any in-flight saves to land before reading remote, otherwise
+    // we'd clobber the local optimistic state with the pre-save snapshot.
+    if (pendingSaves.current.length > 0) {
+      await Promise.allSettled(pendingSaves.current);
+    }
+
+    // Snapshot what we have locally so we can detect a clobber. Counts
+    // act as a cheap signature: if the remote we just loaded has fewer
+    // subtasks than what we hold locally, something is wrong.
+    const localSubCount = (dataRef.current?.workstreams || [])
+      .reduce((s, w) => s + (w.tasks || []).reduce((ss, t) => ss + (t.subtasks || []).length, 0), 0);
+    const localTaskCount = (dataRef.current?.workstreams || [])
+      .reduce((s, w) => s + (w.tasks || []).length, 0);
+
     const [freshData, freshCtx, dataTs, ctxTs] = await Promise.all([
       loadData(),
       loadContext(),
@@ -626,6 +662,25 @@ export default function App() {
     ]);
     const d = freshData || DEFAULT_DATA;
     const c = freshCtx ?? DEFAULT_CONTEXT;
+
+    const remoteSubCount = (d?.workstreams || [])
+      .reduce((s, w) => s + (w.tasks || []).reduce((ss, t) => ss + (t.subtasks || []).length, 0), 0);
+    const remoteTaskCount = (d?.workstreams || [])
+      .reduce((s, w) => s + (w.tasks || []).length, 0);
+
+    // Diagnostic: this should never fire after the pendingSaves await above.
+    // If it does, there's still a leak somewhere in the persist flow.
+    if (dataRef.current && (localSubCount > remoteSubCount || localTaskCount > remoteTaskCount)) {
+      console.warn(
+        "[workplan] getFreshData would clobber optimistic state — keeping local instead.",
+        { localSubCount, remoteSubCount, localTaskCount, remoteTaskCount }
+      );
+      // Don't overwrite local data; just refresh context.
+      setContextDoc(c);
+      if (ctxTs) syncTimestamps.current[CONTEXT_KEY] = ctxTs;
+      return { data: dataRef.current, contextDoc: c };
+    }
+
     setData(d);
     dataRef.current = d;
     setContextDoc(c);

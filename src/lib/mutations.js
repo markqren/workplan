@@ -10,6 +10,15 @@
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const nowIso = () => new Date().toISOString();
 
+// When a completion is being recorded for a past day, anchor the
+// timestamp to noon-local on that date so it lands inside the
+// intended calendar day for the user's timezone (and survives the
+// 7-day auto-collapse logic correctly).
+function completedAtFor(effectiveDate) {
+  if (!effectiveDate || effectiveDate === todayStr()) return nowIso();
+  return new Date(`${effectiveDate}T12:00:00`).toISOString();
+}
+
 // ── Invariants ─────────────────────────────────────────────────────
 
 // Status auto-rules:
@@ -79,11 +88,15 @@ export function addSubtask(data, taskId, title, opts = {}) {
   });
 }
 
-export function toggleSubtask(data, taskId, subtaskId) {
+// opts.effectiveDate (YYYY-MM-DD) backdates the completedAt timestamp
+// to noon-local on that date — used when toggling from a historical
+// day-rail view so completions reflect the day the work was actually
+// finished, not the day Mark got around to checking the box.
+export function toggleSubtask(data, taskId, subtaskId, opts = {}) {
   return mapTask(data, taskId, t => {
     const subtasks = (t.subtasks || []).map(s =>
       s.id === subtaskId
-        ? { ...s, done: !s.done, completedAt: !s.done ? nowIso() : null }
+        ? { ...s, done: !s.done, completedAt: !s.done ? completedAtFor(opts.effectiveDate) : null }
         : s
     );
     return { ...t, subtasks };
@@ -470,8 +483,21 @@ export function setTodayPlan(data, taskIds, userNote) {
   };
 }
 
-export function setTodayLog(data, log) {
-  return { ...data, todayPlan: { ...(data.todayPlan || {}), log } };
+// `date` (YYYY-MM-DD) is optional. When omitted or equal to today,
+// the log is written to todayPlan.log. When set to a past date, the
+// log is written to dailyLogs[date].log so retroactive summaries
+// land in the correct daily snapshot.
+export function setTodayLog(data, log, date = null) {
+  if (!date || date === todayStr()) {
+    return { ...data, todayPlan: { ...(data.todayPlan || {}), log } };
+  }
+  return {
+    ...data,
+    dailyLogs: {
+      ...(data.dailyLogs || {}),
+      [date]: { ...(data.dailyLogs?.[date] || {}), log },
+    },
+  };
 }
 
 export function updateTodayPlan(data, updates) {
@@ -576,7 +602,9 @@ export function applyAgentAction(data, action, ctx = {}) {
       }
       return data;
     case "toggle_subtask":
-      if (action.task_id && action.subtask_id) return toggleSubtask(data, action.task_id, action.subtask_id);
+      if (action.task_id && action.subtask_id) {
+        return toggleSubtask(data, action.task_id, action.subtask_id, { effectiveDate: action.effectiveDate });
+      }
       return data;
     case "delete_subtask":
       if (action.task_id && action.subtask_id) return deleteSubtask(data, action.task_id, action.subtask_id);
@@ -616,7 +644,7 @@ export function applyAgentAction(data, action, ctx = {}) {
       if (Array.isArray(action.taskIds)) return setTodayPlan(data, action.taskIds, action.userNote);
       return data;
     case "set_today_log":
-      if (typeof action.log === "string") return setTodayLog(data, action.log);
+      if (typeof action.log === "string") return setTodayLog(data, action.log, action.date);
       return data;
     case "update_context":
       // Backward compat — appends a dated note.

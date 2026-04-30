@@ -367,7 +367,14 @@ export default function App() {
   const handleEdit = (taskId, updates) => mutate(d => M.updateTask(d, taskId, updates));
   const handleDelete = (taskId) => mutate(d => M.deleteTask(d, taskId));
   const handleAddTask = (wsId, task) => mutate(d => M.addTask(d, wsId, task));
-  const handleToggleSubtask = (taskId, subtaskId) => mutate(d => M.toggleSubtask(d, taskId, subtaskId));
+  const handleToggleSubtask = (taskId, subtaskId, opts = {}) => mutate(d => M.toggleSubtask(d, taskId, subtaskId, opts));
+  const handleUpdateDailyLog = (date, updates) => mutate(d => ({
+    ...d,
+    dailyLogs: {
+      ...(d.dailyLogs || {}),
+      [date]: { ...(d.dailyLogs?.[date] || {}), ...updates },
+    },
+  }));
   const handleAddSubtask = (taskId, title) => mutate(d => M.addSubtask(d, taskId, title));
   const handleDeleteSubtask = (taskId, subtaskId) => mutate(d => M.deleteSubtask(d, taskId, subtaskId));
   const handleAddNote = (note) => mutate(d => ({ ...d, notes: [note, ...(d.notes || [])] }));
@@ -748,6 +755,7 @@ export default function App() {
             onClearNowPin={handleClearNowPin}
             onAcceptTomorrowDraft={handleAcceptTomorrowDraft}
             onDismissTomorrowDraft={handleDismissTomorrowDraft}
+            onUpdateDailyLog={handleUpdateDailyLog}
             onAcceptProposal={handleAcceptProposal}
             onSkipProposal={handleSkipProposal}
             onEditProposal={handleEditProposal}

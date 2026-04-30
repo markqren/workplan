@@ -234,10 +234,16 @@ export const AGENT_TOOLS = [
   },
   {
     name: "set_today_log",
-    description: "Write or replace today's daily log (a concise summary of progress, completed work, blockers).",
+    description:
+      "Write or replace a daily log entry (concise summary of progress, completed work, blockers). " +
+      "Defaults to today's log. Pass `date` (YYYY-MM-DD) to backdate the log to a previous day — useful when Mark is summarizing yesterday or an earlier day after the fact. " +
+      "When backdating, base the summary on that day's snapshot in the digest (dailyLogs) plus what Mark tells you, not on today's state.",
     input_schema: {
       type: "object",
-      properties: { log: { type: "string" } },
+      properties: {
+        log: { type: "string" },
+        date: { type: "string", description: "Optional YYYY-MM-DD. Omit for today; provide for a past day." },
+      },
       required: ["log"],
     },
   },
@@ -453,14 +459,17 @@ export function digestTrackerState(data) {
     lines.push(`Today plan: (empty)${plan.userNote ? ` focus: "${plan.userNote}"` : ""}`);
   }
 
-  // Active workstreams (skip empty / fully-done)
+  // Workstreams: full detail for active tasks, plus a compact one-line
+  // roll-up of DONE tasks per workstream so the agent can resolve any
+  // task by name (e.g. "the Travel Task" → PER-1) without asking Mark
+  // for the id.
   lines.push("");
-  lines.push("Workstreams (active tasks only):");
+  lines.push("Workstreams (active tasks expanded; DONE tasks listed compactly):");
   for (const ws of data.workstreams) {
     const active = ws.tasks.filter(t => t.status !== "DONE");
-    const doneCount = ws.tasks.length - active.length;
-    if (active.length === 0 && doneCount === 0) continue;
-    lines.push(`- ${ws.name} (${ws.id}, prefix ${ws.prefix}) — ${active.length} active, ${doneCount} done`);
+    const done = ws.tasks.filter(t => t.status === "DONE");
+    if (active.length === 0 && done.length === 0) continue;
+    lines.push(`- ${ws.name} (${ws.id}, prefix ${ws.prefix}) — ${active.length} active, ${done.length} done`);
     for (const t of active) {
       const subs = t.subtasks || [];
       const subStr = subs.length > 0 ? ` [${subs.filter(s => s.done).length}/${subs.length}]` : "";
@@ -480,19 +489,73 @@ export function digestTrackerState(data) {
       }
       if (openSubs.length > 5) lines.push(`    … +${openSubs.length - 5} more open subtasks`);
     }
+    if (done.length > 0) {
+      lines.push(`  done (${done.length}): ${done.map(t => `${t.id} (${t.title})`).join("; ")}`);
+    }
   }
 
-  // Recent daily logs (last 3 days that have logs)
+  // Flat task index (alphabetical by title) so the agent can resolve
+  // any task — active or DONE — by name or partial-name match without
+  // a tool roundtrip. Workstreams above show structure; this is the
+  // lookup-friendly view.
+  const flatIndex = data.workstreams.flatMap(w =>
+    (w.tasks || []).map(t => ({
+      id: t.id,
+      title: t.title || "(untitled)",
+      status: t.status,
+      ws: w.name,
+    }))
+  );
+  if (flatIndex.length > 0) {
+    flatIndex.sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
+    lines.push("");
+    lines.push("Task index (for name lookup — match by exact / partial title):");
+    for (const t of flatIndex) {
+      const tag = t.status === "DONE" ? " [done]" : t.status === "WAITING" ? " [waiting]" : "";
+      lines.push(`  ${t.id} — ${t.title}${tag}`);
+    }
+  }
+
+  // Recent daily logs (last 7 days, with per-day plan + completions to
+  // support retroactive summarization). Subtask completions are
+  // attributed to the day stamped on completedAt.
   if (data.dailyLogs) {
-    const dates = Object.keys(data.dailyLogs).sort().slice(-3);
+    const dates = Object.keys(data.dailyLogs).sort().slice(-7);
     if (dates.length > 0) {
+      // Build completions-by-date by scanning all subtasks once.
+      const completionsByDate = Object.fromEntries(dates.map(d => [d, []]));
+      for (const ws of data.workstreams || []) {
+        for (const t of ws.tasks || []) {
+          for (const s of t.subtasks || []) {
+            if (!s.done || !s.completedAt) continue;
+            const d = s.completedAt.slice(0, 10);
+            if (completionsByDate[d]) completionsByDate[d].push(`${s.id} (${t.title} → ${s.title})`);
+          }
+        }
+      }
       lines.push("");
-      lines.push("Recent daily logs:");
+      lines.push("Recent days (last 7):");
       for (const date of dates) {
         const e = data.dailyLogs[date];
         if (!e) continue;
-        const summary = (e.log || "").trim().split("\n").slice(0, 2).join(" ").slice(0, 200);
-        lines.push(`- ${date}: ${summary || "(no log)"} — ${e.taskIds?.length || 0} tasks${e.userNote ? `, focus: "${e.userNote}"` : ""}`);
+        const planIds = e.taskIds || [];
+        const planSummary = planIds.length > 0
+          ? planIds.map(id => {
+              const title = e.taskTitleSnap?.[id] || taskById[id]?.title || id;
+              const status = e.taskStatusSnap?.[id] || taskById[id]?.status || "?";
+              const tag = status === "DONE" ? "✓" : status === "IN PROGRESS" ? "·" : status === "WAITING" ? "w" : "○";
+              return `${id}${tag}`;
+            }).join(" ")
+          : "(no plan)";
+        const logPreview = (e.log || "").trim().slice(0, 280);
+        const completed = completionsByDate[date] || [];
+        const completedLine = completed.length > 0
+          ? `  completed subtasks (${completed.length}): ${completed.slice(0, 5).join("; ")}${completed.length > 5 ? `; +${completed.length - 5} more` : ""}`
+          : "";
+        lines.push(`- ${date}${e.userNote ? ` — focus: "${e.userNote}"` : ""}`);
+        lines.push(`  plan (${planIds.length}): ${planSummary}`);
+        if (completedLine) lines.push(completedLine);
+        lines.push(`  log: ${logPreview || "(none yet)"}`);
       }
     }
   }
@@ -615,7 +678,7 @@ Rules while in this mode:
 export const buildSystemPrompt = (data, contextDoc, recentHistory, historyLength, mode = "normal") => {
   const digest = digestTrackerState(data);
   const signals = buildFeedbackSignals(data, recentHistory);
-  const longConvWarning = historyLength >= 24
+  const longConvWarning = historyLength >= 48
     ? `\n\n## LONG CONVERSATION\nThis chat has ${historyLength} messages. If durable context has surfaced that isn't in the briefing yet, save it now via update_context_section before it's lost.`
     : "";
   const modeBlock = mode === "morning_intake" ? `\n${MORNING_INTAKE_BLOCK}\n` : "";
@@ -628,6 +691,7 @@ export const buildSystemPrompt = (data, contextDoc, recentHistory, historyLength
 3. When durable context surfaces (people, preferences, dynamics, project facts), capture it via update_context_section so you'll have it next session.
 4. When you reason about prioritization, reference specific task ids and the political/strategic context.
 5. Watch the feedback-signals block: if your last suggestion was undone, take a different angle.
+6. **Resolve task names yourself.** When Mark refers to a task by name or description ("Travel Task", "the rental car thing", "the May 1:1 prep", "the segmentation deck"), DO NOT ask him for the ID. Scan the "Task index" section of the digest — it lists every task (active and DONE) by id and title. Match by exact title, partial title overlap, or workstream-prefix keyword. Then act on the resolved id directly. Branch only if the lookup is ambiguous: exactly one match → just do it; multiple plausible matches → list the candidates in one line and ask which; zero matches → only then ask Mark for clarification or offer to create a new task.
 
 ## BRIEFING DOCUMENT
 ${contextDoc}
@@ -649,6 +713,7 @@ ${signals}
 - Morning planning is handled by Morning Intake (conversational, in-app review of proposals). When intake is active you're in MORNING INTAKE MODE; otherwise treat any explicit "triage" / "what should I work on today?" as a direct request and call set_today_plan with an ordered list of task ids and a one-line userNote naming the focus (3–7 tasks; weigh due dates, meeting prep, dependencies, rollover patterns).
 - "Today I just need to finish X" → set_today_plan with just those tasks.
 - "Summarize my day" / "wrap up" → call set_today_log with completed work, progress, blockers.
+- "Summarize yesterday" / "summarize April 28" / "fill in Tuesday's log" → call set_today_log with the explicit \`date\` parameter (YYYY-MM-DD). Ground the summary in that day's snapshot in the digest's "Recent days" section (plan, completed subtasks, status changes) plus what Mark tells you — not today's state. If the digest already shows substantive completions for that day and Mark gives a one-liner, you can write a reasonable summary directly. If the day is sparse and Mark is vague, ask 1 short clarifying question before writing.
 - "End of day" / "draft tomorrow" → call set_today_log AND draft_tomorrow_plan (don't apply set_today_plan — Mark reviews the draft first).
 - "I'm working on X now" / "focus on X" → call set_now_pin with that task. Clear with clear_now_pin when Mark is done or moves on.
 - "Weekly retro" / Sunday session → call set_weekly_retro with a structured retrospective for the week that just ended. weekKey is the ISO date of that week's Monday.

@@ -116,7 +116,7 @@ function DayRail({ dates, viewingDate, todayDate, onSelect, dailyLogs, todayPlan
   );
 }
 
-function FocusCallout({ focus, onEdit, isEditing, value, setValue, onSave, accentColor, isReadOnly }) {
+function FocusCallout({ focus, onEdit, isEditing, value, setValue, onSave, accentColor, isPlanReadOnly }) {
   const accent = accentColor || "#E8A838";
   if (isEditing) {
     return (
@@ -150,7 +150,7 @@ function FocusCallout({ focus, onEdit, isEditing, value, setValue, onSave, accen
   }
   return (
     <div
-      onClick={() => !isReadOnly && onEdit()}
+      onClick={() => !isPlanReadOnly && onEdit()}
       style={{
         background: focus
           ? `linear-gradient(135deg, ${accent}18 0%, #18181B 100%)`
@@ -158,7 +158,7 @@ function FocusCallout({ focus, onEdit, isEditing, value, setValue, onSave, accen
         border: `1px solid ${accent}33`,
         borderLeft: `4px solid ${accent}`,
         borderRadius: "10px", padding: "14px 18px", marginBottom: "16px",
-        cursor: isReadOnly ? "default" : "pointer",
+        cursor: isPlanReadOnly ? "default" : "pointer",
         transition: "background 0.15s",
       }}
     >
@@ -168,7 +168,7 @@ function FocusCallout({ focus, onEdit, isEditing, value, setValue, onSave, accen
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <span>Today's focus</span>
-        {!isReadOnly && <span style={{ fontSize: "9px", color: "#3A3A3E" }}>click to edit</span>}
+        {!isPlanReadOnly && <span style={{ fontSize: "9px", color: "#3A3A3E" }}>click to edit</span>}
       </div>
       <div style={{
         fontSize: focus ? "16px" : "13px", fontWeight: 500,
@@ -273,7 +273,7 @@ function StalledNudges({ stalled, onNudge }) {
   );
 }
 
-function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned, isReadOnly,
+function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned, isPlanReadOnly,
                        onStatusChange, onEdit, onDelete, onToggleSubtask, onAddSubtask, onDeleteSubtask,
                        onMoveUp, onMoveDown, onRemove, canMoveUp, canMoveDown }) {
   const c = STATUS_CONFIG[task.status] || STATUS_CONFIG["NOT STARTED"];
@@ -321,7 +321,7 @@ function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned,
             background: isPinned ? task.wsColor || "#6CC4A1" : (task.wsColor ? `${task.wsColor}22` : "#2A2A2E"),
             border: `1px solid ${task.wsColor || "#4A4A4E"}`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, padding: 0, cursor: isReadOnly ? "default" : "pointer",
+            flexShrink: 0, padding: 0, cursor: isPlanReadOnly ? "default" : "pointer",
           }}
         >
           <span style={{
@@ -411,20 +411,20 @@ function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned,
       {expanded && (
         <div style={{ padding: "0 8px 8px 8px" }}>
           <div style={{ display: "flex", gap: "4px", alignItems: "center", padding: "0 4px 6px 4px" }}>
-            <button onClick={(e) => { e.stopPropagation(); onMoveUp(); }} disabled={!canMoveUp || isReadOnly}
+            <button onClick={(e) => { e.stopPropagation(); onMoveUp(); }} disabled={!canMoveUp || isPlanReadOnly}
               style={{
                 background: "transparent", border: "1px solid #2A2A2E", borderRadius: "3px",
-                color: canMoveUp ? "#6E6E73" : "#2A2A2E", cursor: canMoveUp ? "pointer" : "default",
+                color: canMoveUp && !isPlanReadOnly ? "#6E6E73" : "#2A2A2E", cursor: canMoveUp && !isPlanReadOnly ? "pointer" : "default",
                 fontSize: "10px", padding: "2px 8px", fontFamily: "'JetBrains Mono', monospace",
               }}>▲ up</button>
-            <button onClick={(e) => { e.stopPropagation(); onMoveDown(); }} disabled={!canMoveDown || isReadOnly}
+            <button onClick={(e) => { e.stopPropagation(); onMoveDown(); }} disabled={!canMoveDown || isPlanReadOnly}
               style={{
                 background: "transparent", border: "1px solid #2A2A2E", borderRadius: "3px",
-                color: canMoveDown ? "#6E6E73" : "#2A2A2E", cursor: canMoveDown ? "pointer" : "default",
+                color: canMoveDown && !isPlanReadOnly ? "#6E6E73" : "#2A2A2E", cursor: canMoveDown && !isPlanReadOnly ? "pointer" : "default",
                 fontSize: "10px", padding: "2px 8px", fontFamily: "'JetBrains Mono', monospace",
               }}>▼ down</button>
             <div style={{ flex: 1 }} />
-            {!isReadOnly && (
+            {!isPlanReadOnly && (
               <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
                 style={{
                   background: "transparent", border: "1px solid #2A2A2E", borderRadius: "3px",
@@ -436,7 +436,7 @@ function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned,
           <TaskRow
             task={task}
             wsColor={task.wsColor}
-            readOnly={isReadOnly}
+            readOnly={false}
             onStatusChange={onStatusChange}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -477,6 +477,7 @@ export default function TodayView({
   onSkipMorningIntake,
   onIterateMorningIntake,
   onOpenAgent,
+  onUpdateDailyLog,
 }) {
   const mobile = useIsMobile();
   const [triageInput, setTriageInput] = useState("");
@@ -496,12 +497,28 @@ export default function TodayView({
 
   const todayDate = todayIso();
   const isViewingToday = viewingDate === todayDate;
-  const isReadOnly = !isViewingToday;
+  // History view: plan-level edits (focus note, reorder, remove from
+  // today, now-pin, end-of-day, etc.) are locked, but task-level
+  // mutations (subtask toggle, status cycling) are allowed and get
+  // their completedAt timestamps backdated to viewingDate. Daily log
+  // editing is also allowed and writes to dailyLogs[date].
+  const isPlanReadOnly = !isViewingToday;
+  // Backdate completion timestamps when toggling subtasks from a
+  // historical day — Mark might be marking off Tuesday's work on Wednesday.
+  const wrappedToggleSubtask = isViewingToday
+    ? onToggleSubtask
+    : (taskId, subtaskId) => onToggleSubtask(taskId, subtaskId, { effectiveDate: viewingDate });
 
-  // Sync log input when external changes happen (agent writes log, day changes)
+  // Sync log input when external changes happen (agent writes log, day changes,
+  // or user scrubs to a different day in history view).
   useEffect(() => {
-    if (!editingLog) setLogInput(todayPlan.log || "");
-  }, [todayPlan.log, editingLog]);
+    if (editingLog) return;
+    if (viewingDate === todayIso()) {
+      setLogInput(todayPlan.log || "");
+    } else {
+      setLogInput(data.dailyLogs?.[viewingDate]?.log || "");
+    }
+  }, [todayPlan.log, editingLog, viewingDate, data.dailyLogs]);
   useEffect(() => {
     setNoteInput(todayPlan.userNote || "");
   }, [todayPlan.userNote]);
@@ -636,16 +653,25 @@ export default function TodayView({
 
   const handleLogBlur = () => {
     setEditingLog(false);
-    if (logInput !== (todayPlan.log || "")) onUpdateTodayPlan({ log: logInput });
+    const currentLog = isViewingToday ? (todayPlan.log || "") : (viewingPlan.log || "");
+    if (logInput === currentLog) return;
+    if (isViewingToday) {
+      onUpdateTodayPlan({ log: logInput });
+    } else if (onUpdateDailyLog) {
+      onUpdateDailyLog(viewingDate, { log: logInput });
+    }
   };
 
   const handleSummarizeDay = async () => {
     if (logSummarizing) return;
     setLogSummarizing(true);
     try {
-      const response = await onTriageSubmit(
-        "Summarize my day — write a daily log of what was accomplished, progress made, and any blockers. Use set_today_log."
-      );
+      const prompt = isViewingToday
+        ? "Summarize my day — write a daily log of what was accomplished, progress made, and any blockers. Use set_today_log."
+        : `Summarize ${fmtDateLong(viewingDate)} (${viewingDate}) — write a concise daily log of what was accomplished, progress made, and any blockers for THAT day. ` +
+          `Call set_today_log with date="${viewingDate}". Ground the summary in that day's snapshot in the digest's "Recent days" section. ` +
+          `If the day has substantive completions and a focus note, you can write a reasonable summary directly; otherwise ask one short clarifying question first.`;
+      const response = await onTriageSubmit(prompt);
       setTriageResponse(response);
     } catch (err) {
       setTriageResponse(`Error: ${err.message}`);
@@ -705,16 +731,22 @@ export default function TodayView({
         todayPlan={todayPlan}
       />
 
-      {/* Read-only history banner */}
+      {/* History view banner — explains backdating semantics */}
       {!isViewingToday && (
         <div style={{
           background: "#1C1C1E", border: "1px solid #2A2A2E", borderRadius: "8px",
-          padding: "8px 14px", marginBottom: "12px", display: "flex", alignItems: "center", gap: "10px",
+          padding: "8px 14px", marginBottom: "12px",
+          display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap",
         }}>
           <span style={{
-            fontSize: "10px", color: "#6E6E73", fontFamily: "'JetBrains Mono', monospace",
+            fontSize: "10px", color: "#E8A838", fontFamily: "'JetBrains Mono', monospace",
             textTransform: "uppercase", letterSpacing: "0.5px",
-          }}>history · read-only</span>
+          }}>editing {fmtDateShort(viewingDate).toLowerCase()}</span>
+          <span style={{
+            fontSize: "11px", color: "#8E8E93", fontFamily: "'DM Sans', sans-serif", flex: 1,
+          }}>
+            Subtask completions backdate to this day. Plan order &amp; focus stay locked.
+          </span>
           <button
             onClick={() => setViewingDate(todayDate)}
             style={{
@@ -735,7 +767,7 @@ export default function TodayView({
         setValue={setNoteInput}
         onSave={handleNoteBlur}
         accentColor={accentColor}
-        isReadOnly={isReadOnly}
+        isPlanReadOnly={isPlanReadOnly}
       />
 
       {/* Stat tiles */}
@@ -891,13 +923,13 @@ export default function TodayView({
             idx={idx}
             expanded={expandedTaskId === task.id}
             onToggleExpand={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
-            onSetNow={() => !isReadOnly && onSetNowPin(task.id)}
+            onSetNow={() => !isPlanReadOnly && onSetNowPin(task.id)}
             isPinned={data.nowPinTaskId === task.id}
-            isReadOnly={isReadOnly}
+            isPlanReadOnly={isPlanReadOnly}
             onStatusChange={onStatusChange}
             onEdit={onEdit}
             onDelete={onDelete}
-            onToggleSubtask={onToggleSubtask}
+            onToggleSubtask={wrappedToggleSubtask}
             onAddSubtask={onAddSubtask}
             onDeleteSubtask={onDeleteSubtask}
             onMoveUp={() => idx > 0 && onReorderToday(idx, idx - 1)}
@@ -1000,29 +1032,27 @@ export default function TodayView({
           <div style={{
             fontFamily: "'Space Mono', monospace", fontSize: "12px", color: "#6E6E73",
             textTransform: "uppercase", letterSpacing: "1px",
-          }}>{isViewingToday ? "Daily Log" : "Log"}</div>
-          {isViewingToday && (
-            <button
-              onClick={handleSummarizeDay}
-              disabled={logSummarizing}
-              style={{
-                background: "transparent", border: "1px solid #2A2A2E", borderRadius: "6px",
-                color: logSummarizing ? "#4A4A4E" : "#6CC4A1", cursor: logSummarizing ? "default" : "pointer",
-                fontSize: "10px", padding: "4px 10px", fontFamily: "'JetBrains Mono', monospace",
-              }}
-            >
-              {logSummarizing ? "summarizing…" : "ask agent to summarize"}
-            </button>
-          )}
+          }}>{isViewingToday ? "Daily Log" : `Log — ${fmtDateShort(viewingDate)}`}</div>
+          <button
+            onClick={handleSummarizeDay}
+            disabled={logSummarizing}
+            style={{
+              background: "transparent", border: "1px solid #2A2A2E", borderRadius: "6px",
+              color: logSummarizing ? "#4A4A4E" : "#6CC4A1", cursor: logSummarizing ? "default" : "pointer",
+              fontSize: "10px", padding: "4px 10px", fontFamily: "'JetBrains Mono', monospace",
+            }}
+          >
+            {logSummarizing ? "summarizing…" : (isViewingToday ? "ask agent to summarize" : "ask agent to summarize this day")}
+          </button>
         </div>
 
-        {isViewingToday && editingLog ? (
+        {editingLog ? (
           <textarea
             autoFocus
             value={logInput}
             onChange={e => setLogInput(e.target.value)}
             onBlur={handleLogBlur}
-            placeholder="Write today's log…"
+            placeholder={isViewingToday ? "Write today's log…" : `Write ${fmtDateShort(viewingDate)}'s log…`}
             style={{
               width: "100%", background: "#0D0D0F", color: "#C5C5CA",
               border: "1px solid #2A2A2E", borderRadius: "6px",
@@ -1034,12 +1064,14 @@ export default function TodayView({
         ) : (
           <div
             onClick={() => {
-              if (!isViewingToday) return;
-              setLogInput(todayPlan.log || "");
+              const existing = isViewingToday
+                ? (todayPlan.log || "")
+                : (data.dailyLogs?.[viewingDate]?.log || "");
+              setLogInput(existing);
               setEditingLog(true);
             }}
             style={{
-              cursor: isViewingToday ? "pointer" : "default",
+              cursor: "pointer",
               padding: "8px 12px", background: "#1C1C1E",
               borderRadius: "6px", minHeight: "40px",
             }}
@@ -1060,7 +1092,7 @@ export default function TodayView({
               }}>
                 {isViewingToday
                   ? "Click to write today's log, or ask the agent to summarize…"
-                  : "No log written for this day."}
+                  : `Click to write ${fmtDateShort(viewingDate)}'s log, or ask the agent to summarize…`}
               </span>
             )}
           </div>

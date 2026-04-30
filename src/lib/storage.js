@@ -95,7 +95,7 @@ export async function loadAgentHistory() {
 
 export async function saveAgentHistory(history) {
   try {
-    const r = await set(AGENT_HISTORY_KEY, JSON.stringify(history.slice(-30)));
+    const r = await set(AGENT_HISTORY_KEY, JSON.stringify(history.slice(-60)));
     return r.updatedAt;
   } catch (e) {
     console.error("Agent history save failed:", e);

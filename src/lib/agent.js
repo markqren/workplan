@@ -14,6 +14,8 @@
 // signals" block derived from agent history (undone actions,
 // stalled tasks, plan rollovers).
 
+import { localDateStr } from "./mutations.js";
+
 // ── Tool definitions ───────────────────────────────────────────────
 
 export const AGENT_TOOLS = [
@@ -422,7 +424,7 @@ function fmtDays(ms) {
 
 export function digestTrackerState(data) {
   const lines = [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   lines.push(`Week: ${data.weekLabel || "(none)"}`);
   lines.push(`Today: ${today}`);
 

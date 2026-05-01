@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { loadAgentHistory, saveAgentHistory } from "../lib/storage.js";
 import { callAgent, AGENT_MODELS } from "../lib/agent.js";
+import { localDateStr } from "../lib/mutations.js";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 
 function actionLabels(actions) {
@@ -144,7 +145,7 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
       setMessages(newMessages);
 
       // Re-resolve mode from freshData (intake state may have flipped)
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateStr();
       const intake = freshData?.morningIntake?.[today];
       const resolvedMode = (intake?.status === "active" || intake?.status === "reviewing")
         ? "morning_intake" : agentMode;

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { localDateStr } from "../lib/mutations.js";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 
 export default function WeekShape({ weekShape, workstreams, readOnly, onUpdateDay, onAddDay, onRemoveDay, dailyLogs }) {
@@ -117,7 +118,7 @@ export default function WeekShape({ weekShape, workstreams, readOnly, onUpdateDa
         for (let i = 0; i < 7; i++) {
           const d = new Date(monday);
           d.setDate(d.getDate() + i);
-          weekDates.push(d.toISOString().slice(0, 10));
+          weekDates.push(localDateStr(d));
         }
         const weekEntries = weekDates
           .filter(date => dailyLogs[date])

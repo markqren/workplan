@@ -7,7 +7,21 @@
 // All functions are pure — they take the previous data object and
 // return a new one. Never mutate inputs in place.
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+// Use local calendar date (not UTC) so users in non-UTC timezones see the
+// correct date. new Date().toISOString() is always UTC — at 9 PM PDT that
+// already reads the next day's UTC date. localDateStr() uses the device's
+// local year/month/day instead.
+export function localDateStr(d = new Date()) {
+  return (
+    d.getFullYear() +
+    "-" +
+    String(d.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(d.getDate()).padStart(2, "0")
+  );
+}
+
+const todayStr = localDateStr;
 const nowIso = () => new Date().toISOString();
 
 // When a completion is being recorded for a past day, anchor the
@@ -292,7 +306,7 @@ export function expandMorningProposals(toolInput) {
   return out;
 }
 
-const todayDateStr = () => new Date().toISOString().slice(0, 10);
+const todayDateStr = localDateStr;
 
 function getIntake(data, date) {
   return data.morningIntake?.[date] || null;

@@ -18,6 +18,7 @@ import { callAgent } from "./lib/agent.js";
 import { loadAgentHistory, saveAgentHistory } from "./lib/storage.js";
 import { generateWeeklySummary } from "./lib/export.js";
 import * as M from "./lib/mutations.js";
+import { localDateStr } from "./lib/mutations.js";
 
 // Compute the current week label: "Week of March 24-28"
 function getCurrentWeekLabel() {
@@ -130,7 +131,7 @@ export default function App() {
         needsSave = true;
       }
       // Daily reset for today plan
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = localDateStr();
       if (!d.todayPlan || d.todayPlan.date !== todayStr) {
         // Snapshot previous day's plan into dailyLogs before resetting.
         // Capture per-task statuses too so the Week view can render
@@ -340,11 +341,11 @@ export default function App() {
     if (dow !== 0 && dow !== 1) return;
 
     // Compute previous-week Monday key
-    const todayIso = today.toISOString().slice(0, 10);
+    const todayIso = localDateStr(today);
     const d = new Date(todayIso + "T12:00:00");
     const offset = d.getDay() === 0 ? -6 : 1 - d.getDay();
     d.setDate(d.getDate() + offset - 7);
-    const prevWeekKey = d.toISOString().slice(0, 10);
+    const prevWeekKey = localDateStr(d);
 
     if (data.weeklyRetros?.[prevWeekKey]) return;
 
@@ -424,13 +425,13 @@ export default function App() {
   const handleClearNowPin = () => mutate(d => M.clearNowPin(d));
 
   // ── Morning intake ──────────────────────────────────────────────
-  const todayDateStr = new Date().toISOString().slice(0, 10);
+  const todayDateStr = localDateStr();
   const intakeForToday = data?.morningIntake?.[todayDateStr] || null;
   const intakeActive = intakeForToday && (intakeForToday.status === "active" || intakeForToday.status === "reviewing");
   const agentMode = intakeActive ? "morning_intake" : "normal";
 
   const handleAcceptProposal = useCallback((proposalId) => {
-    const date = new Date().toISOString().slice(0, 10);
+    const date = localDateStr();
     let nextContext = null;
     persist(prev => {
       const intake = prev.morningIntake?.[date];
@@ -454,22 +455,22 @@ export default function App() {
   }, [persist]);
 
   const handleSkipProposal = useCallback((proposalId) => {
-    const date = new Date().toISOString().slice(0, 10);
+    const date = localDateStr();
     persist(prev => M.decideMorningProposal(prev, date, proposalId, "skipped"));
   }, [persist]);
 
   const handleEditProposal = useCallback((proposalId, payloadUpdates) => {
-    const date = new Date().toISOString().slice(0, 10);
+    const date = localDateStr();
     persist(prev => M.updateMorningProposal(prev, date, proposalId, payloadUpdates));
   }, [persist]);
 
   const handleFinishMorningIntake = useCallback(() => {
-    const date = new Date().toISOString().slice(0, 10);
+    const date = localDateStr();
     persist(prev => M.completeMorningIntake(prev, date));
   }, [persist]);
 
   const handleSkipMorningIntake = useCallback(() => {
-    const date = new Date().toISOString().slice(0, 10);
+    const date = localDateStr();
     persist(prev => M.skipMorningIntake(prev, date));
   }, [persist]);
 
@@ -490,7 +491,7 @@ export default function App() {
 
     const current = dataRef.current;
     const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    const dateStr = localDateStr(now);
     const archiveKey = `work-tracker-archive-${dateStr}`;
 
     // Archive current data
@@ -521,7 +522,7 @@ export default function App() {
       })),
       weekShape: d.weekShape.map(day => ({ ...day, focus: "TBD", activities: "" })),
       notes: [],
-      todayPlan: { date: new Date().toISOString().slice(0, 10), taskIds: [], userNote: "", log: "", autoTriaged: false },
+      todayPlan: { date: localDateStr(), taskIds: [], userNote: "", log: "", autoTriaged: false },
     }));
   };
 
@@ -700,8 +701,8 @@ export default function App() {
     const modelKey = localStorage.getItem("workplan-agent-model") || "sonnet";
     // Resolve mode: explicit override, else current intake state
     const resolvedMode = mode
-      || (freshData?.morningIntake?.[new Date().toISOString().slice(0, 10)]?.status === "active"
-          || freshData?.morningIntake?.[new Date().toISOString().slice(0, 10)]?.status === "reviewing"
+      || (freshData?.morningIntake?.[localDateStr()]?.status === "active"
+          || freshData?.morningIntake?.[localDateStr()]?.status === "reviewing"
           ? "morning_intake" : "normal");
     const { parsed, rawJson, usage } = await callAgent(
       newMessages.slice(-20),
@@ -730,7 +731,7 @@ export default function App() {
   useEffect(() => {
     if (morningKickoffFiredRef.current) return;
     if (loading || !data) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateStr();
     const intake = data.morningIntake?.[today];
     if (intake) {
       // Already started/skipped/done. If still active or reviewing,

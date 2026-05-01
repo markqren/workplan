@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { STATUS_CONFIG, TYPE_ICONS } from "../lib/constants.js";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
+import { localDateStr } from "../lib/mutations.js";
 import TaskRow from "./TaskRow.jsx";
 import MorningIntake from "./MorningIntake.jsx";
 
@@ -14,7 +15,9 @@ const monthLong = ["January", "February", "March", "April", "May", "June", "July
 const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const dayLong = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+// Use local calendar date (not UTC) to avoid timezone roll-over at
+// e.g. 9 PM PDT where UTC is already the next calendar day.
+function todayIso() { return localDateStr(); }
 
 // Pick the most-urgent open subtask for an at-a-glance subtitle.
 // Order of preference: overdue → due within 2 days → first not-done.
@@ -45,7 +48,7 @@ function weekDates(refDate) {
   for (let i = 0; i < 6; i++) {
     const x = new Date(d);
     x.setDate(d.getDate() + offsetToMon + i);
-    out.push(x.toISOString().slice(0, 10));
+    out.push(localDateStr(x));
   }
   return out;
 }

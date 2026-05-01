@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { localDateStr } from "../lib/mutations.js";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -8,7 +9,7 @@ function mondayOf(iso) {
   const dow = d.getDay();
   const diff = dow === 0 ? -6 : 1 - dow;
   d.setDate(d.getDate() + diff);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 function fmtWeekRange(weekKey) {
@@ -41,12 +42,12 @@ export default function WeeklyRetro({ data, onTriageSubmit }) {
   const [selectedWeek, setSelectedWeek] = useState(null);
 
   // Today / current-week / previous-week keys
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localDateStr();
   const currentWeekKey = mondayOf(todayIso);
   const prevWeekKey = (() => {
     const d = new Date(currentWeekKey + "T12:00:00");
     d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 10);
+    return localDateStr(d);
   })();
 
   const retros = data.weeklyRetros || {};

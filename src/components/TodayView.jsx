@@ -24,7 +24,7 @@ function todayIso() { return localDateStr(); }
 function nextOpenSubtask(task) {
   const subs = task?.subtasks || [];
   if (!subs.length) return null;
-  const open = subs.filter(s => !s.done);
+  const open = subs.filter(s => !s.done && !s.deferred);
   if (!open.length) return null;
   const now = Date.now();
   const overdue = open.find(s => s.dueDate && new Date(s.dueDate + "T23:59:59").getTime() < now);
@@ -277,7 +277,7 @@ function StalledNudges({ stalled, onNudge }) {
 }
 
 function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned, isPlanReadOnly,
-                       onStatusChange, onEdit, onDelete, onToggleSubtask, onAddSubtask, onDeleteSubtask,
+                       onStatusChange, onEdit, onDelete, onToggleSubtask, onToggleSubtaskDeferred, onAddSubtask, onDeleteSubtask,
                        onMoveUp, onMoveDown, onRemove, canMoveUp, canMoveDown }) {
   const c = STATUS_CONFIG[task.status] || STATUS_CONFIG["NOT STARTED"];
   const subs = task.subtasks || [];
@@ -288,7 +288,7 @@ function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned,
   // Find soonest urgent subtask due-date
   let urgentBadge = null;
   for (const s of subs) {
-    if (s.done || !s.dueDate) continue;
+    if (s.done || s.deferred || !s.dueDate) continue;
     const ms = new Date(s.dueDate + "T23:59:59").getTime() - Date.now();
     if (ms < 0) {
       urgentBadge = { label: `⚠ ${fmtSubDue(s.dueDate)}`, color: "#E85B5B" };
@@ -444,6 +444,7 @@ function CondensedRow({ task, idx, expanded, onToggleExpand, onSetNow, isPinned,
             onEdit={onEdit}
             onDelete={onDelete}
             onToggleSubtask={onToggleSubtask}
+            onToggleSubtaskDeferred={onToggleSubtaskDeferred}
             onAddSubtask={onAddSubtask}
             onDeleteSubtask={onDeleteSubtask}
           />
@@ -466,6 +467,7 @@ export default function TodayView({
   onEdit,
   onDelete,
   onToggleSubtask,
+  onToggleSubtaskDeferred,
   onAddSubtask,
   onDeleteSubtask,
   onTriageSubmit,
@@ -511,6 +513,7 @@ export default function TodayView({
   const wrappedToggleSubtask = isViewingToday
     ? onToggleSubtask
     : (taskId, subtaskId) => onToggleSubtask(taskId, subtaskId, { effectiveDate: viewingDate });
+  const wrappedToggleSubtaskDeferred = (taskId, subtaskId, deferred = null) => onToggleSubtaskDeferred(taskId, subtaskId, deferred);
 
   // Sync log input when external changes happen (agent writes log, day changes,
   // or user scrubs to a different day in history view).
@@ -571,7 +574,7 @@ export default function TodayView({
     let dueSoon = 0;
     for (const t of planTasks) {
       for (const s of t.subtasks || []) {
-        if (s.done || !s.dueDate) continue;
+        if (s.done || s.deferred || !s.dueDate) continue;
         const ms = new Date(s.dueDate + "T23:59:59").getTime() - Date.now();
         if (ms < 0) overdueSubs++;
         else if (ms < TWO_DAYS) dueSoon++;
@@ -933,6 +936,7 @@ export default function TodayView({
             onEdit={onEdit}
             onDelete={onDelete}
             onToggleSubtask={wrappedToggleSubtask}
+            onToggleSubtaskDeferred={wrappedToggleSubtaskDeferred}
             onAddSubtask={onAddSubtask}
             onDeleteSubtask={onDeleteSubtask}
             onMoveUp={() => idx > 0 && onReorderToday(idx, idx - 1)}
@@ -1116,7 +1120,7 @@ export default function TodayView({
           </div>
           {otherActive.map(task => {
             const c = STATUS_CONFIG[task.status] || STATUS_CONFIG["NOT STARTED"];
-            const openSubs = (task.subtasks || []).filter(s => !s.done);
+            const openSubs = (task.subtasks || []).filter(s => !s.done && !s.deferred);
             const isOpen = expandedOtherId === task.id;
             const activeSub = nextOpenSubtask(task);
             return (

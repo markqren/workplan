@@ -2,7 +2,7 @@ import { useState } from "react";
 import TaskRow from "./TaskRow.jsx";
 import { useIsMobile } from "../hooks/useMediaQuery.js";
 
-export default function Workstream({ ws, readOnly, onStatusChange, onEdit, onDelete, onAddTask, onToggleSubtask, onAddSubtask, onDeleteSubtask, emptyFilterMessage }) {
+export default function Workstream({ ws, readOnly, onStatusChange, onEdit, onDelete, onAddTask, onToggleSubtask, onToggleSubtaskDeferred, onAddSubtask, onDeleteSubtask, emptyFilterMessage }) {
   const mobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -65,7 +65,7 @@ export default function Workstream({ ws, readOnly, onStatusChange, onEdit, onDel
             </div>
           )}
           {ws.tasks.map(task => (
-            <TaskRow key={task.id} task={task} wsColor={ws.color} readOnly={readOnly} onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onToggleSubtask={onToggleSubtask} onAddSubtask={onAddSubtask} onDeleteSubtask={onDeleteSubtask} />
+            <TaskRow key={task.id} task={task} wsColor={ws.color} readOnly={readOnly} onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onToggleSubtask={onToggleSubtask} onToggleSubtaskDeferred={onToggleSubtaskDeferred} onAddSubtask={onAddSubtask} onDeleteSubtask={onDeleteSubtask} />
           ))}
           {!readOnly && adding ? (
             <div style={{ padding: "12px 16px", background: "#1C1C1E", borderRadius: "8px", border: "1px dashed #3A3A3E", marginTop: "4px" }}>

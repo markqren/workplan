@@ -43,9 +43,9 @@ export function normalizeTaskStatus(task) {
   const subs = task.subtasks || [];
   if (subs.length === 0) return task;
   const allDone = subs.every(s => s.done);
-  const anyOpen = subs.some(s => !s.done);
+  const anyUnresolved = subs.some(s => !s.done);
   if (allDone && task.status !== "DONE") return { ...task, status: "DONE" };
-  if (anyOpen && task.status === "DONE") return { ...task, status: "IN PROGRESS" };
+  if (anyUnresolved && task.status === "DONE") return { ...task, status: "IN PROGRESS" };
   return task;
 }
 
@@ -58,6 +58,27 @@ function mapTask(data, taskId, transform) {
       tasks: ws.tasks.map(t => (t.id === taskId ? normalizeTaskStatus(transform(t)) : t)),
     })),
   };
+}
+
+function findWorkstream(data, wsId) {
+  return (data.workstreams || []).find(w => w.id === wsId) || null;
+}
+
+function findTask(data, taskId) {
+  for (const ws of data.workstreams || []) {
+    for (const t of ws.tasks || []) {
+      if (t.id === taskId) return t;
+    }
+  }
+  return null;
+}
+
+function findSubtask(task, subtaskId) {
+  return (task?.subtasks || []).find(s => s.id === subtaskId) || null;
+}
+
+function findDocument(task, documentId) {
+  return (task?.documents || []).find(d => d.id === documentId) || null;
 }
 
 // ── Tasks ──────────────────────────────────────────────────────────
@@ -116,9 +137,26 @@ export function toggleSubtask(data, taskId, subtaskId, opts = {}) {
   return mapTask(data, taskId, t => {
     const subtasks = (t.subtasks || []).map(s =>
       s.id === subtaskId
-        ? { ...s, done: !s.done, completedAt: !s.done ? completedAtFor(opts.effectiveDate) : null }
+        ? { ...s, done: !s.done, completedAt: !s.done ? completedAtFor(opts.effectiveDate) : null, deferred: false, deferredAt: null }
         : s
     );
+    return { ...t, subtasks };
+  });
+}
+
+export function toggleSubtaskDeferred(data, taskId, subtaskId, deferred = null) {
+  return mapTask(data, taskId, t => {
+    const subtasks = (t.subtasks || []).map(s => {
+      if (s.id !== subtaskId) return s;
+      const nextDeferred = deferred == null ? !s.deferred : !!deferred;
+      return {
+        ...s,
+        deferred: nextDeferred,
+        deferredAt: nextDeferred ? nowIso() : null,
+        done: nextDeferred ? false : s.done,
+        completedAt: nextDeferred ? null : s.completedAt,
+      };
+    });
     return { ...t, subtasks };
   });
 }
@@ -626,6 +664,11 @@ export function applyAgentAction(data, action, ctx = {}) {
         return toggleSubtask(data, action.task_id, action.subtask_id, { effectiveDate: action.effectiveDate });
       }
       return data;
+    case "defer_subtask":
+      if (action.task_id && action.subtask_id) {
+        return toggleSubtaskDeferred(data, action.task_id, action.subtask_id, action.deferred);
+      }
+      return data;
     case "delete_subtask":
       if (action.task_id && action.subtask_id) return deleteSubtask(data, action.task_id, action.subtask_id);
       return data;
@@ -677,7 +720,7 @@ export function applyAgentAction(data, action, ctx = {}) {
       }
       return data;
     case "set_now_pin":
-      if (action.task_id) return setNowPin(data, action.task_id);
+      if (action.task_id && findTask(data, action.task_id)) return setNowPin(data, action.task_id);
       return data;
     case "clear_now_pin":
       return clearNowPin(data);
@@ -707,11 +750,118 @@ export function applyAgentAction(data, action, ctx = {}) {
   }
 }
 
+function validateAgentAction(data, action, ctx = {}) {
+  const { onContextUpdate } = ctx;
+  if (!action?.type) return { ok: false, reason: "Missing action type." };
+  switch (action.type) {
+    case "add_task":
+      if (!action.workstream_id || !action.task) return { ok: false, reason: "add_task requires workstream_id and task." };
+      if (!findWorkstream(data, action.workstream_id)) return { ok: false, reason: `Workstream '${action.workstream_id}' was not found.` };
+      if (findTask(data, action.task.id)) return { ok: false, reason: `Task '${action.task.id}' already exists.` };
+      return { ok: true };
+    case "update_task":
+    case "delete_task":
+    case "add_subtask":
+    case "add_document":
+      if (!action.task_id) return { ok: false, reason: `${action.type} requires task_id.` };
+      if (!findTask(data, action.task_id)) return { ok: false, reason: `Task '${action.task_id}' was not found.` };
+      return { ok: true };
+    case "toggle_subtask":
+    case "defer_subtask":
+    case "delete_subtask":
+    case "update_subtask": {
+      if (!action.task_id || !action.subtask_id) return { ok: false, reason: `${action.type} requires task_id and subtask_id.` };
+      const task = findTask(data, action.task_id);
+      if (!task) return { ok: false, reason: `Task '${action.task_id}' was not found.` };
+      if (!findSubtask(task, action.subtask_id)) return { ok: false, reason: `Subtask '${action.subtask_id}' was not found on '${action.task_id}'.` };
+      return { ok: true };
+    }
+    case "update_document":
+    case "delete_document": {
+      if (!action.task_id || !action.document_id) return { ok: false, reason: `${action.type} requires task_id and document_id.` };
+      const task = findTask(data, action.task_id);
+      if (!task) return { ok: false, reason: `Task '${action.task_id}' was not found.` };
+      if (!findDocument(task, action.document_id)) return { ok: false, reason: `Document '${action.document_id}' was not found on '${action.task_id}'.` };
+      return { ok: true };
+    }
+    case "update_context":
+      if (!action.text) return { ok: false, reason: "update_context requires text." };
+      if (!onContextUpdate) return { ok: false, reason: "Context update handler is unavailable." };
+      return { ok: true };
+    case "update_context_section":
+      if (!action.section || !action.text) return { ok: false, reason: "update_context_section requires section and text." };
+      if (!onContextUpdate) return { ok: false, reason: "Context update handler is unavailable." };
+      return { ok: true };
+    case "add_workstream":
+      if (!action.workstream?.id) return { ok: false, reason: "add_workstream requires workstream.id." };
+      if (findWorkstream(data, action.workstream.id)) return { ok: false, reason: `Workstream '${action.workstream.id}' already exists.` };
+      return { ok: true };
+    case "update_workstream":
+    case "delete_workstream":
+      if (!action.workstream_id) return { ok: false, reason: `${action.type} requires workstream_id.` };
+      if (!findWorkstream(data, action.workstream_id)) return { ok: false, reason: `Workstream '${action.workstream_id}' was not found.` };
+      return { ok: true };
+    case "reorder_workstreams":
+      if (!Array.isArray(action.order)) return { ok: false, reason: "reorder_workstreams requires order array." };
+      return { ok: true };
+    case "set_today_plan":
+      if (!Array.isArray(action.taskIds)) return { ok: false, reason: "set_today_plan requires taskIds array." };
+      for (const id of action.taskIds) {
+        if (!findTask(data, id)) return { ok: false, reason: `Task '${id}' was not found for today's plan.` };
+      }
+      return { ok: true };
+    case "set_today_log":
+      if (typeof action.log !== "string") return { ok: false, reason: "set_today_log requires log string." };
+      return { ok: true };
+    case "set_now_pin":
+      if (!action.task_id) return { ok: false, reason: "set_now_pin requires task_id." };
+      if (!findTask(data, action.task_id)) return { ok: false, reason: `Task '${action.task_id}' was not found for NOW pin.` };
+      return { ok: true };
+    case "clear_now_pin":
+      return { ok: true };
+    case "set_weekly_retro":
+      if (!action.weekKey || !action.retro) return { ok: false, reason: "set_weekly_retro requires weekKey and retro." };
+      return { ok: true };
+    case "propose_morning_plan":
+      return { ok: true };
+    case "draft_tomorrow_plan":
+      if (!Array.isArray(action.taskIds)) return { ok: false, reason: "draft_tomorrow_plan requires taskIds array." };
+      for (const id of action.taskIds) {
+        if (!findTask(data, id)) return { ok: false, reason: `Task '${id}' was not found for tomorrow draft.` };
+      }
+      return { ok: true };
+    case "add_note":
+      if (!action.text) return { ok: false, reason: "add_note requires text." };
+      return { ok: true };
+    default:
+      return { ok: false, reason: `Unknown action '${action.type}'.` };
+  }
+}
+
 // Apply a list of actions in order.
 export function applyAgentActions(data, actions, ctx = {}) {
+  return applyAgentActionsWithReport(data, actions, ctx).data;
+}
+
+export function applyAgentActionsWithReport(data, actions, ctx = {}) {
   let next = data;
+  const appliedActions = [];
+  const failedActions = [];
   for (const action of actions || []) {
-    next = applyAgentAction(next, action, ctx);
+    const validation = validateAgentAction(next, action, ctx);
+    if (!validation.ok) {
+      failedActions.push({ action, reason: validation.reason || "Validation failed." });
+      continue;
+    }
+    try {
+      next = applyAgentAction(next, action, ctx);
+      appliedActions.push(action);
+    } catch (err) {
+      failedActions.push({
+        action,
+        reason: err instanceof Error ? err.message : "Mutation failed unexpectedly.",
+      });
+    }
   }
-  return next;
+  return { data: next, appliedActions, failedActions };
 }

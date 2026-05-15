@@ -20,6 +20,8 @@ import { generateWeeklySummary } from "./lib/export.js";
 import * as M from "./lib/mutations.js";
 import { localDateStr } from "./lib/mutations.js";
 
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || "dev";
+
 // Compute the current week label: "Week of March 24-28"
 function getCurrentWeekLabel() {
   const now = new Date();
@@ -391,6 +393,7 @@ export default function App() {
   const handleDelete = (taskId) => mutate(d => M.deleteTask(d, taskId));
   const handleAddTask = (wsId, task) => mutate(d => M.addTask(d, wsId, task));
   const handleToggleSubtask = (taskId, subtaskId, opts = {}) => mutate(d => M.toggleSubtask(d, taskId, subtaskId, opts));
+  const handleToggleSubtaskDeferred = (taskId, subtaskId, deferred = null) => mutate(d => M.toggleSubtaskDeferred(d, taskId, subtaskId, deferred));
   const handleUpdateDailyLog = (date, updates) => mutate(d => ({
     ...d,
     dailyLogs: {
@@ -587,18 +590,28 @@ export default function App() {
     // Context-doc updates have to be flushed after persist() returns
     // so we batch them here and apply once.
     let nextContext = null;
+    let actionReport = { appliedActions: [], failedActions: [] };
 
-    persist(prev => M.applyAgentActions(prev, actions, {
-      onContextUpdate: (fn) => {
-        nextContext = fn(nextContext != null ? nextContext : contextDocRef.current || "");
-      },
-    }));
+    persist(prev => {
+      const report = M.applyAgentActionsWithReport(prev, actions, {
+        onContextUpdate: (fn) => {
+          nextContext = fn(nextContext != null ? nextContext : contextDocRef.current || "");
+        },
+      });
+      actionReport = report;
+      return report.data;
+    });
 
     if (nextContext != null) {
       setContextDoc(nextContext);
       contextDocRef.current = nextContext;
       saveContext(nextContext).then(ts => { if (ts) syncTimestamps.current[CONTEXT_KEY] = ts; });
     }
+
+    if (actionReport.failedActions.length > 0) {
+      console.warn("[workplan] Agent actions failed validation:", actionReport.failedActions);
+    }
+    return actionReport;
   }, [persist]);
 
   const handleUndo = useCallback(async (messageIndex) => {
@@ -712,10 +725,31 @@ export default function App() {
       modelKey,
       resolvedMode,
     );
-    if (parsed.actions && parsed.actions.length > 0) {
-      handleAgentActions(parsed.actions, newMessages.length);
-    }
-    const assistantMsg = { role: "assistant", content: parsed.message || "Done.", rawJson, actions: parsed.actions || [], usage: usage || null, modelKey };
+    const requestedActions = parsed.actions || [];
+    const actionReport = (requestedActions.length > 0)
+      ? handleAgentActions(parsed.actions, newMessages.length)
+      : { appliedActions: [], failedActions: [] };
+    const appliedActions = actionReport.appliedActions || [];
+    const failedActions = actionReport.failedActions || [];
+    const failureSuffix = failedActions.length > 0
+      ? `\n\n⚠ ${failedActions.length} action${failedActions.length === 1 ? "" : "s"} failed: ${failedActions.map(f => `${f.action?.type || "unknown"} (${f.reason})`).join("; ")}`
+      : "";
+    const assistantMsg = {
+      role: "assistant",
+      content: (parsed.message || "Done.") + failureSuffix,
+      rawJson,
+      actions: appliedActions,
+      mutationReport: {
+        requestedActions,
+        appliedActions,
+        failedActions,
+        requestedCount: requestedActions.length,
+        appliedCount: appliedActions.length,
+        failedCount: failedActions.length,
+      },
+      usage: usage || null,
+      modelKey,
+    };
     const updated = [...newMessages, assistantMsg];
     const ts = await saveAgentHistory(updated);
     if (ts) syncTimestamps.current[AGENT_HISTORY_KEY] = ts;
@@ -789,7 +823,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0D0D0F", color: "#E5E5EA", fontFamily: "'DM Sans', sans-serif" }}>
-      <Header data={effectiveData} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onExport={handleExport} onReset={handleReset} viewingArchive={viewingArchive} archiveIndex={archiveIndex} onNavigateWeek={handleNavigateWeek} onJumpToWeek={handleJumpToWeek} offline={offline} onClearNowPin={!readOnly ? handleClearNowPin : undefined} />
+      <Header data={effectiveData} view={view} setView={setView} filter={filter} setFilter={setFilter} onNewWeek={handleNewWeek} onExport={handleExport} onReset={handleReset} viewingArchive={viewingArchive} archiveIndex={archiveIndex} onNavigateWeek={handleNavigateWeek} onJumpToWeek={handleJumpToWeek} offline={offline} onClearNowPin={!readOnly ? handleClearNowPin : undefined} appVersion={APP_VERSION} />
 
       <div style={{ padding: mobile ? "16px" : "24px 32px", maxWidth: "960px" }}>
         {view === "today" && !viewingArchive && (
@@ -804,6 +838,7 @@ export default function App() {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onToggleSubtask={handleToggleSubtask}
+            onToggleSubtaskDeferred={handleToggleSubtaskDeferred}
             onAddSubtask={handleAddSubtask}
             onDeleteSubtask={handleDeleteSubtask}
             onTriageSubmit={handleTriageSubmit}
@@ -825,10 +860,10 @@ export default function App() {
           <>
             <StatsBar workstreams={effectiveData.workstreams} />
             {visibleWorkstreams.map(ws => (
-              <Workstream key={ws.id} ws={ws} readOnly={readOnly} onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
+              <Workstream key={ws.id} ws={ws} readOnly={readOnly} onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onToggleSubtaskDeferred={handleToggleSubtaskDeferred} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
             ))}
             {emptyFilteredWorkstreams.map(ws => (
-              <Workstream key={ws.id} ws={ws} readOnly={readOnly} emptyFilterMessage="No tasks match this filter" onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
+              <Workstream key={ws.id} ws={ws} readOnly={readOnly} emptyFilterMessage="No tasks match this filter" onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete} onAddTask={handleAddTask} onToggleSubtask={handleToggleSubtask} onToggleSubtaskDeferred={handleToggleSubtaskDeferred} onAddSubtask={handleAddSubtask} onDeleteSubtask={handleDeleteSubtask} />
             ))}
             <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, #2A2A2E, transparent)", margin: "16px 0" }} />
             <div style={{ background: "#18181B", borderRadius: "10px", padding: "16px", border: "1px solid #2A2A2E" }}>

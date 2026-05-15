@@ -1,7 +1,7 @@
 import { signOut } from '../lib/auth.js';
 import { useIsMobile } from '../hooks/useMediaQuery.js';
 
-export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onExport, onReset, viewingArchive, archiveIndex, onNavigateWeek, onJumpToWeek, offline, onClearNowPin }) {
+export default function Header({ data, view, setView, filter, setFilter, onNewWeek, onExport, onReset, viewingArchive, archiveIndex, onNavigateWeek, onJumpToWeek, offline, onClearNowPin, appVersion }) {
   const mobile = useIsMobile();
 
   const nowPinTask = data?.nowPinTaskId
@@ -38,6 +38,17 @@ export default function Header({ data, view, setView, filter, setFilter, onNewWe
           </>
         )}
         <div style={{ flex: 1 }} />
+        <span style={{
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: "10px",
+          color: "#3A3A3E",
+          padding: "2px 6px",
+          border: "1px solid #2A2A2E",
+          borderRadius: "4px",
+          marginRight: "4px",
+        }}>
+          v{appVersion || "dev"}
+        </span>
         <button onClick={onExport} style={{ background: "transparent", border: "none", color: "#3A3A3E", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>export</button>
         {!viewingArchive && (
           <>
@@ -52,6 +63,14 @@ export default function Header({ data, view, setView, filter, setFilter, onNewWe
           <button onClick={() => canGoOlder && onNavigateWeek(-1)} style={arrowStyle(canGoOlder)}>←</button>
           <span style={{ color: viewingArchive ? "#E8A838" : "#6E6E73" }}>{data.weekLabel}</span>
           <button onClick={() => canGoNewer && onNavigateWeek(1)} style={arrowStyle(canGoNewer)}>→</button>
+          <span style={{
+            color: "#3A3A3E",
+            border: "1px solid #2A2A2E",
+            borderRadius: "4px",
+            padding: "2px 6px",
+          }}>
+            v{appVersion || "dev"}
+          </span>
           {viewingArchive ? (
             <button onClick={() => onJumpToWeek(null)} style={{ background: "transparent", border: "none", color: "#5B8DEF", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace", padding: 0 }}>current</button>
           ) : (

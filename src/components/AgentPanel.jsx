@@ -12,6 +12,7 @@ function actionLabels(actions) {
     if (a.type === "delete_task") return `− ${a.task_id}`;
     if (a.type === "add_subtask") return `+ ${a.task_id}/sub`;
     if (a.type === "toggle_subtask") return `✓ ${a.subtask_id}`;
+    if (a.type === "defer_subtask") return `⏸ ${a.subtask_id}`;
     if (a.type === "delete_subtask") return `− ${a.subtask_id}`;
     if (a.type === "update_subtask") return `↻ ${a.subtask_id}`;
     if (a.type === "add_note") return "📝 note";
@@ -158,15 +159,29 @@ export default function AgentPanel({ onApplyActions, onUndo, getUndoableMessages
         resolvedMode,
       );
 
-      if (parsed.actions && parsed.actions.length > 0) {
-        onApplyActions(parsed.actions, newMessages.length);
-      }
+      const requestedActions = parsed.actions || [];
+      const actionReport = (requestedActions.length > 0)
+        ? onApplyActions(parsed.actions, newMessages.length)
+        : { appliedActions: [], failedActions: [] };
+      const appliedActions = actionReport.appliedActions || [];
+      const failedActions = actionReport.failedActions || [];
+      const failureSuffix = failedActions.length > 0
+        ? `\n\n⚠ ${failedActions.length} action${failedActions.length === 1 ? "" : "s"} failed: ${failedActions.map(f => `${f.action?.type || "unknown"} (${f.reason})`).join("; ")}`
+        : "";
 
       const assistantMsg = {
         role: "assistant",
-        content: parsed.message || "Done.",
+        content: (parsed.message || "Done.") + failureSuffix,
         rawJson,
-        actions: parsed.actions || [],
+        actions: appliedActions,
+        mutationReport: {
+          requestedActions,
+          appliedActions,
+          failedActions,
+          requestedCount: requestedActions.length,
+          appliedCount: appliedActions.length,
+          failedCount: failedActions.length,
+        },
         usage: usage || null,
         modelKey,
       };

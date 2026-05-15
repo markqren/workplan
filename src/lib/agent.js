@@ -92,6 +92,19 @@ export const AGENT_TOOLS = [
     },
   },
   {
+    name: "defer_subtask",
+    description: "Mark a subtask as deferred (not done, but removed from active views) or resume it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string" },
+        subtask_id: { type: "string" },
+        deferred: { type: "boolean", description: "Optional explicit state. Omit to toggle." },
+      },
+      required: ["task_id", "subtask_id"],
+    },
+  },
+  {
     name: "delete_subtask",
     description: "Remove a subtask.",
     input_schema: {
@@ -474,11 +487,14 @@ export function digestTrackerState(data) {
     lines.push(`- ${ws.name} (${ws.id}, prefix ${ws.prefix}) — ${active.length} active, ${done.length} done`);
     for (const t of active) {
       const subs = t.subtasks || [];
-      const subStr = subs.length > 0 ? ` [${subs.filter(s => s.done).length}/${subs.length}]` : "";
+      const deferredCount = subs.filter(s => s.deferred && !s.done).length;
+      const subStr = subs.length > 0
+        ? ` [${subs.filter(s => s.done).length}/${subs.length}${deferredCount > 0 ? `, ${deferredCount} deferred` : ""}]`
+        : "";
       const stakeStr = t.stakeholders?.length ? ` {${t.stakeholders.join(",")}}` : "";
       lines.push(`  ${t.id} [${t.status}] (${t.type}, ${t.target || "?"})${subStr}${stakeStr} — ${t.title}`);
       // Include open subtasks with due-date urgency
-      const openSubs = subs.filter(s => !s.done);
+      const openSubs = subs.filter(s => !s.done && !s.deferred);
       for (const s of openSubs.slice(0, 5)) {
         let dueTag = "";
         if (s.dueDate) {
@@ -638,7 +654,7 @@ export function buildFeedbackSignals(data, recentHistory) {
     const subs = t.subtasks || [];
     if (subs.length === 0) continue;
     const lastCompletedAt = subs.filter(s => s.completedAt).map(s => new Date(s.completedAt).getTime()).sort().pop();
-    if (lastCompletedAt && Date.now() - lastCompletedAt > SEVEN_DAYS && subs.some(s => !s.done)) {
+    if (lastCompletedAt && Date.now() - lastCompletedAt > SEVEN_DAYS && subs.some(s => !s.done && !s.deferred)) {
       stale.push({ id: t.id, title: t.title, since: fmtDays(Date.now() - lastCompletedAt) });
     }
   }
@@ -701,7 +717,7 @@ ${contextDoc}
 ## TASK MODEL
 - Statuses: NOT STARTED | IN PROGRESS | WAITING | DONE
 - Types: N=Narrative, D=Data/SQL, A=Advisory, --=Misc
-- Subtask ids = parent id + letter suffix (e.g. SEG-5a). The app auto-flips parent status: parent → DONE when all subs done; parent → IN PROGRESS when any sub is reopened or added to a DONE task. Don't fight this.
+- Subtask ids = parent id + letter suffix (e.g. SEG-5a). Subtasks can also be deferred ("deferred: true"): deferred means not done but intentionally inactive. The app auto-flips parent status: parent → DONE when all subs done; parent → IN PROGRESS when any unresolved sub is reopened/added to a DONE task. Don't fight this.
 - completedAt is set by the app when toggling. Only set it manually when backfilling legacy subtasks.
 - dueDate (subtasks) = optional YYYY-MM-DD. UI highlights yellow within 2 days, red when overdue.
 
@@ -751,9 +767,17 @@ function sanitizeHistory(messages) {
     // assistant: prefer the conversational text; suffix with action tags so
     // the model has a record of what it did last turn.
     const text = m.content || "";
-    const actionTags = (m.actions || []).map(a => a.type).filter(Boolean);
+    const report = m.mutationReport || null;
+    const applied = report?.appliedActions || m.actions || [];
+    const failed = report?.failedActions || [];
+    const actionTags = applied.map(a => a.type).filter(Boolean);
+    const failedTags = failed
+      .slice(0, 3)
+      .map(f => `${f.action?.type || "unknown"}: ${f.reason || "failed"}`);
     const undoneTag = m.undone ? " [Mark UNDID this turn]" : "";
-    const suffix = actionTags.length > 0 ? `\n\n[Applied: ${actionTags.join(", ")}]${undoneTag}` : undoneTag;
+    const appliedSuffix = actionTags.length > 0 ? `\n\n[Applied: ${actionTags.join(", ")}]` : "";
+    const failedSuffix = failedTags.length > 0 ? `\n[Failed: ${failedTags.join("; ")}]` : "";
+    const suffix = `${appliedSuffix}${failedSuffix}${undoneTag}`;
     return { role: "assistant", content: text + suffix };
   }).filter(m => (m.content || "").trim().length > 0);
 }

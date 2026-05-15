@@ -38,7 +38,8 @@ export function generateWeeklySummary(data) {
         lines.push(`- **${t.id}** [${type}] ${t.title}`);
         if (t.subtasks && t.subtasks.length > 0) {
           for (const s of t.subtasks) {
-            lines.push(`  - [${s.done ? "x" : " "}] ${s.title}`);
+            const mark = s.done ? "x" : s.deferred ? "~" : " ";
+            lines.push(`  - [${mark}] ${s.title}`);
           }
         }
       }

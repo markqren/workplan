@@ -39,7 +39,7 @@ function SubtaskCheckbox({ checked, onChange }) {
   );
 }
 
-export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdit, onDelete, onToggleSubtask, onAddSubtask, onDeleteSubtask }) {
+export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdit, onDelete, onToggleSubtask, onToggleSubtaskDeferred, onAddSubtask, onDeleteSubtask }) {
   const mobile = useIsMobile();
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
@@ -55,13 +55,14 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
 
   const subtasks = task.subtasks || [];
   const doneCount = subtasks.filter(s => s.done).length;
+  const isDeferred = (s) => !s.done && !!s.deferred;
 
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
   const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
   const isOldCompleted = (s) => s.done && s.completedAt && (Date.now() - new Date(s.completedAt).getTime()) >= SEVEN_DAYS;
 
   const dueDateUrgency = (s) => {
-    if (!s.dueDate || s.done) return null;
+    if (!s.dueDate || s.done || isDeferred(s)) return null;
     const diff = new Date(s.dueDate + "T23:59:59").getTime() - Date.now();
     if (diff < 0) return "overdue";
     if (diff < TWO_DAYS) return "soon";
@@ -318,11 +319,31 @@ export default function TaskRow({ task, wsColor, readOnly, onStatusChange, onEdi
                     }}>{urgency === "overdue" ? "⚠ " : ""}{formatDueDate(s.dueDate)}</span>
                   )}
                   <SubtaskCheckbox checked={s.done} onChange={() => onToggleSubtask(task.id, s.id)} />
+                  <button
+                    onClick={() => onToggleSubtaskDeferred?.(task.id, s.id)}
+                    title={isDeferred(s) ? "Resume subtask" : "Defer subtask"}
+                    style={{
+                      background: "transparent",
+                      border: `1px solid ${isDeferred(s) ? "#5B8DEF66" : "#3A3A3E"}`,
+                      color: isDeferred(s) ? "#5B8DEF" : "#6E6E73",
+                      borderRadius: "3px",
+                      fontSize: "9px",
+                      fontFamily: "'JetBrains Mono', monospace",
+                      padding: "1px 5px",
+                      cursor: onToggleSubtaskDeferred ? "pointer" : "default",
+                      flexShrink: 0,
+                      opacity: onToggleSubtaskDeferred ? 1 : 0.5,
+                    }}
+                  >
+                    {isDeferred(s) ? "deferred" : "defer"}
+                  </button>
                   <span style={{
                     fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
-                    color: s.done ? "#6E6E73" : "#C5C5CA",
-                    textDecoration: s.done ? "line-through" : "none",
-                    opacity: s.done ? 0.6 : 1,
+                    color: s.done ? "#6E6E73" : isDeferred(s) ? "#8E8E93" : "#C5C5CA",
+                    textDecoration: s.done ? "line-through" : isDeferred(s) ? "underline" : "none",
+                    textDecorationStyle: isDeferred(s) ? "dashed" : "solid",
+                    textDecorationColor: isDeferred(s) ? "#4A4A4E" : "currentColor",
+                    opacity: s.done || isDeferred(s) ? 0.7 : 1,
                     flex: 1,
                   }}>{s.title}</span>
                   {hoveredSubtask === s.id && (

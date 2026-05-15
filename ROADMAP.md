@@ -1,10 +1,16 @@
 # ⬡ WORKPLAN — Roadmap & Feature Tracker
 
-**Last updated:** Apr 30, 2026 | Stack: Vite + React + Supabase + Netlify Functions
+**Last updated:** May 14, 2026 | Stack: Vite + React + Supabase + Netlify Functions
 
 ---
 
 ## Releases
+
+### v0.10.0 — May 14, 2026 — Deferred subtasks + inactive subtask state
+- **Deferred subtask state** (FEA-47) — Added a first-class deferred state on subtasks (`deferred: true`) so a subtask can be intentionally paused without being marked complete. Deferred subtasks are unresolved (not done), but they are excluded from "active subtask" surfaces (priority-row next-subtask hints, due-soon/overdue counters, other-active open-subtask lists, and digest open-subtask rollups). This gives a clean middle state between "still active right now" and "done".
+- **Inline defer/resume control in subtask rows** — Each subtask now has a `defer` / `deferred` toggle in `TaskRow`. Deferring clears completion fields and visually de-emphasizes the row while keeping it visible and editable.
+- **Agent support for defer workflows** — New `defer_subtask` agent tool/action lets the assistant defer or resume subtasks directly, and action chips now render defer operations in the chat panel.
+- **Export and digest semantics updated** — Weekly markdown export now marks deferred subtasks as `[~]` (distinct from `[x]` done and `[ ]` open). Agent digest and stale-progress heuristics now treat deferred subtasks as intentionally inactive rather than open work.
 
 ### v0.9.0 — Apr 30, 2026 — Backdated history edits + agent name resolution
 - **Backdated subtask completions in history view** (FEA-43) — When viewing a past day via the day rail, subtask checkboxes are now interactive (previously the whole view was read-only). Toggling a subtask done from a historical day backdates `completedAt` to noon-local on that date, so completions land in the day the work was actually finished — not the day Mark got around to checking the box. The history banner is reworded to make the semantics explicit ("Editing tue apr 28 — Subtask completions backdate to this day. Plan order & focus stay locked."). Plan-level controls (focus note, priority reorder, remove from today, now-pin) remain locked to today.
@@ -109,7 +115,7 @@
 ---
 
 <details>
-<summary><strong>Completed</strong> (40 items)</summary>
+<summary><strong>Completed</strong> (41 items)</summary>
 
 | ID | Item | Type | Completed |
 |----|------|------|-----------|
@@ -132,6 +138,7 @@
 | FEA-44 | **Past-day log editing + agent backdating** — Daily log card editable on any historical day; writes to `dailyLogs[date].log`. "Ask agent to summarize" prompt on a historical day passes the explicit date. New optional `date` parameter on `set_today_log` tool routes the agent's write to the correct day. | Feature | Apr 30 |
 | FEA-45 | **Richer per-day digest** — Digest "Recent days" section bumped 3 → 7 days, with per-day plan + status pips, focus note, and subtasks completed that day (attributed by `completedAt` date). Enables grounded retroactive summarization. | Feature | Apr 30 |
 | FEA-46 | **Agent task name resolution** — Per-workstream DONE roll-up + flat alphabetical Task Index in the digest let the agent resolve any task (active or DONE) by name. New top-level prompt rule directs the agent to look up the id and act, only asking when the lookup is ambiguous or empty. | Feature | Apr 30 |
+| FEA-47 | **Deferred subtask state** — Added `deferred` as a first-class subtask state so work can be paused without being marked done. New inline defer/resume control on subtasks, new `defer_subtask` agent action, digest/export updates (`[~]`), and active-work counters/urgency surfaces now exclude deferred subtasks. | Feature | May 14 |
 | INF-01 | **Local Project Setup** — GitHub repo (`markqren/workplan`), SSH configured, Vite + React scaffolded, Supabase JS client installed, initial commit pushed to `main`. | Infra | Feb 28 |
 | INF-02 | **Code Decomposition** — Decomposed monolithic `work-tracker.jsx` into proper project structure: 8 components (`Header`, `StatsBar`, `TaskRow`, `Workstream`, `WeekShape`, `QuickNotes`, `ContextEditor`, `AgentPanel`), lib files (`constants.js`, `storage.js`, `agent.js`), extracted `default-context.md`, global styles in `styles/index.css`. All functionality preserved. | Infra | Mar 2 |
 | INF-03 | **Supabase Setup** — Created Supabase project, `kv_store` table with auto-updating timestamps and open RLS policy. Created `src/lib/supabase.js` client init. Swapped `storage.js` from localStorage to Supabase — same interface, no component changes. Migration SQL saved in `supabase/migrations/001_create_kv_store.sql`. | Infra | Mar 2 |
